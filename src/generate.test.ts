@@ -52,6 +52,16 @@ function comfyReady(): void {
 }
 
 describe('backendStatus', () => {
+  it('forwards the NAI final-request observer through the shared generation entry', async () => {
+    naiReady();
+    const onNaiRequest = vi.fn();
+    await generateImage({ prompt: 'scene', seed: 42 }, undefined, { onNaiRequest });
+    const options = vi.mocked(generateNaiImage).mock.calls[0][3]!;
+    const snapshot = { model: settings.nai.model, prompt: 'scene, quality', negative: 'negative', characters: [],
+      parameters: { seed: 42, width: 832, height: 1216, sampler: 'k_euler', steps: 28, scale: 5, cfg_rescale: 0, noise_schedule: 'karras' } };
+    options.onRequest?.(snapshot);
+    expect(onNaiRequest).toHaveBeenCalledWith(snapshot);
+  });
   it('reports each missing NAI field by name', () => {
     naiReady();
     expect(backendStatus()).toMatchObject({ configured: true, reason: '' });

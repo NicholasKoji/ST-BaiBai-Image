@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyVibes,
@@ -6,6 +6,7 @@ import {
   BUILTIN_NAI_ARTISTS,
   fullNegativePrompt,
   fullPositivePrompt,
+  generateNaiImage,
   isBuiltinNaiArtist,
   naiArtistPrompt,
   naiDefaultQualityTags,
@@ -18,7 +19,9 @@ import {
   unzipNaiImage,
   vibeModelKey,
   NaiError,
+  type NaiRequestSnapshot,
 } from '@/backends/nai';
+import { beginImage, patchImageRequest, records, resetHistory, type ImageRecord } from '@/state/history';
 import type { NaiArtistPreset, NaiModel, NaiSettings, NaiVibe, NaiVibeData } from '@/state/settings';
 import { strToU8, zipSync } from 'fflate';
 
@@ -75,6 +78,117 @@ function vibeData(overrides: Partial<NaiVibeData> = {}): NaiVibeData {
     ...overrides,
   };
 }
+
+describe('最终 NAI 请求快照', () => {
+  beforeEach(() => resetHistory());
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mockImageFetch() {
+    const archive = zipSync({ 'image.png': new Uint8Array([1, 2, 3]) });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(archive.buffer as ArrayBuffer));
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  const values = {
+    prompt: '1boy, 1girl, living room',
+    nl: 'Two people in a living room.',
+    seed: 42,
+    characters: [{ name: 'A', tag: '1boy, black hair', nl: 'Standing on the left.' }],
+  };
+
+  it('历史与实际序列化 POST 同源，包含质量词、负面词及规范化角色 caption', async () => {
+    const fetchMock = mockImageFetch();
+    const s = nai({ qualityTags: 'custom quality', undesiredContent: 'custom negative' });
+    const id = beginImage({ backend: 'nai', model: s.model, ...values, negative: '', size: 'portrait', floor: 25, seq: 1 });
+    await generateNaiImage(s, values, undefined, { onRequest: snapshot => patchImageRequest(id, snapshot) });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const record = records[0] as ImageRecord;
+    expect(record.request?.prompt).toBe('1boy, 1girl, living room, custom quality. Two people in a living room.');
+    expect(record.request?.prompt).toBe(body.input);
+    expect(record.request?.prompt).toBe(body.parameters.v4_prompt.caption.base_caption);
+    expect(record.request?.baseCaption).toBe(body.parameters.v4_prompt.caption.base_caption);
+    expect(record.request?.negative).toBe('custom negative');
+    expect(record.request?.negative).toBe(body.parameters.negative_prompt);
+    expect(record.request?.negative).toBe(body.parameters.v4_negative_prompt.caption.base_caption);
+    expect(record.request?.negativeCaption).toBe(body.parameters.v4_negative_prompt.caption.base_caption);
+    expect(record.request?.characters).toEqual([{ name: 'A', prompt: 'boy, black hair. Standing on the left.', negative: '' }]);
+    expect(record.request?.characters[0].prompt).toBe(body.parameters.v4_prompt.caption.char_captions[0].char_caption);
+    expect(record.request?.parameters).toMatchObject({ seed: 42, width: 832, height: 1216, sampler: 'k_euler', steps: 28, scale: 5 });
+    expect(JSON.stringify(record.request)).not.toContain(s.key);
+    expect(JSON.stringify(record.request)).not.toContain(s.url);
+    expect(record.prompt).toBe(values.prompt); // 原始输入独立保留
+    s.qualityTags = 'changed later';
+    s.undesiredContent = 'changed later';
+    expect(record.request?.negative).toBe('custom negative');
+    expect(record.request?.prompt).toBe(body.input);
+  });
+
+  it('配方覆盖值与实际请求一致，且快照回调修改内容不会改写发送内容', async () => {
+    const fetchMock = mockImageFetch();
+    const s = nai({ qualityTags: 'channel quality', undesiredContent: 'channel negative', activeArtistId: 'a',
+      artistPresets: [{ id: 'a', name: 'A', prompt: 'artist:a', quality: 'recipe quality', negative: 'recipe negative' }] });
+    const captured: NaiRequestSnapshot[] = [];
+    await generateNaiImage(s, values, undefined, { onRequest: snapshot => {
+      captured.push(structuredClone(snapshot));
+      snapshot.prompt = 'modified by callback';
+      snapshot.parameters.seed = 999;
+      s.qualityTags = 'modified settings';
+    } });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(captured[0].prompt).toBe(body.input);
+    expect(body.input).toContain('recipe quality');
+    expect(body.input).not.toContain('channel quality');
+    expect(captured[0].negative).toBe('recipe negative');
+    expect(body.parameters.seed).toBe(42);
+  });
+
+  it('NAI3 不记录实际请求中没有发送的角色提示词', async () => {
+    mockImageFetch();
+    const onRequest = vi.fn();
+    await generateNaiImage(nai({ model: 'nai-diffusion-3' }), values, undefined, { onRequest });
+    expect(onRequest.mock.calls[0][0].characters).toEqual([]);
+    expect(onRequest.mock.calls[0][0].prompt).not.toContain(values.nl);
+    expect(onRequest.mock.calls[0][0].baseCaption).toBeUndefined();
+  });
+
+  it('顶层 input 与 V4 caption 偶有差异时分别保存，不用一个字段冒充另一个', async () => {
+    const fetchMock = mockImageFetch();
+    const s = nai();
+    let reads = 0;
+    Object.defineProperty(s, 'qualityTags', { get: () => ++reads === 1 ? 'caption quality' : 'input quality' });
+    const onRequest = vi.fn();
+    await generateNaiImage(s, values, undefined, { onRequest });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(onRequest.mock.calls[0][0].prompt).toBe(body.input);
+    expect(onRequest.mock.calls[0][0].baseCaption).toBe(body.parameters.v4_prompt.caption.base_caption);
+    expect(onRequest.mock.calls[0][0].prompt).not.toBe(onRequest.mock.calls[0][0].baseCaption);
+  });
+
+  it('HTTP 失败仍保留已发请求的快照，记录回调抛错也不阻断正常出图', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"message":"bad request"}', { status: 400 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onRequest = vi.fn();
+    await expect(generateNaiImage(nai(), values, undefined, { onRequest })).rejects.toThrow();
+    expect(onRequest).toHaveBeenCalledOnce();
+    expect(onRequest.mock.calls[0][0].prompt).toBe(JSON.parse(fetchMock.mock.calls[0][1].body).input);
+    mockImageFetch();
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    try {
+      await expect(generateNaiImage(nai(), values, undefined, { onRequest: () => { throw new Error('history failed'); } })).resolves.toMatchObject({ format: 'png' });
+    } finally { debug.mockRestore(); }
+  });
+
+  it('发送前已取消的任务不记录实发快照，也不调用 fetch', async () => {
+    const fetchMock = mockImageFetch();
+    const onRequest = vi.fn();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(generateNaiImage(nai(), values, controller.signal, { onRequest })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(onRequest).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
 
 describe('naiEndpoint', () => {
   it('自动补 /ai 前缀', () => {

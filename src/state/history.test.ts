@@ -8,6 +8,7 @@ import {
   failLlm,
   finishLlm,
   patchLlmTokens,
+  patchImageRequest,
   records,
   resetHistory,
   roughTokens,
@@ -17,6 +18,7 @@ import {
   type ImageRecord,
   type LlmRecord,
 } from './history';
+import type { NaiRequestSnapshot } from '@/backends/nai';
 
 const { MAX_RECORDS, MAX_CONTENT } = HISTORY_LIMITS;
 
@@ -32,6 +34,60 @@ function llm(source = 'test'): number {
 
 beforeEach(() => {
   resetHistory();
+});
+
+describe('生图最终请求快照', () => {
+  function image(backend: 'nai' | 'comfyui' = 'nai') {
+    return beginImage({ backend, model: 'initial model', prompt: 'scene', nl: '', negative: '', characters: [], seed: 1, size: 'portrait', floor: 25, seq: 1 });
+  }
+  function snapshot(): NaiRequestSnapshot {
+    return { model: 'nai-diffusion-4-5-full', prompt: 'scene, quality', negative: 'bad hands',
+      characters: [{ name: 'A', prompt: 'boy, black hair', negative: '' }],
+      parameters: { seed: 42, width: 832, height: 1216, sampler: 'k_euler', steps: 28, scale: 5, cfg_rescale: 0, noise_schedule: 'karras' } };
+  }
+  it('排队时没有快照，不把原始输入冒充最终请求', () => {
+    image();
+    expect((records[0] as ImageRecord).request).toBeNull();
+  });
+  it('快照深拷贝且不包含未知字段，更新实际模型/种子而不改历史状态', () => {
+    const id = image();
+    const input = Object.assign(snapshot(), { key: 'secret', url: 'secret-url' });
+    Object.assign(input.parameters, { reference_image_multiple: ['sensitive image'] });
+    patchImageRequest(id, input);
+    input.characters[0].prompt = 'changed';
+    input.parameters.seed = 999;
+    input.prompt = 'changed';
+    const record = records[0] as ImageRecord;
+    expect(record.request).toEqual(snapshot());
+    expect(record).toMatchObject({ model: 'nai-diffusion-4-5-full', seed: 42, status: 'running', prompt: 'scene', negative: '' });
+    expect(JSON.stringify(record.request)).not.toContain('secret');
+    expect(JSON.stringify(record.request)).not.toContain('sensitive image');
+  });
+  it('快照沿用文本留存上限并明确标注截断', () => {
+    const id = image();
+    const input = snapshot();
+    input.prompt = 'x'.repeat(MAX_CONTENT + 1);
+    patchImageRequest(id, input);
+    expect((records[0] as ImageRecord).request?.prompt).toBe(truncate(input.prompt));
+  });
+  it('重试只更新原记录，失败/取消后仍可查看快照', () => {
+    const id = image();
+    patchImageRequest(id, snapshot());
+    patchImageRequest(id, snapshot());
+    failImage(id, 'network error');
+    expect(records).toHaveLength(1);
+    expect((records[0] as ImageRecord).request?.negative).toBe('bad hands');
+    failImage(id, '', true);
+    expect((records[0] as ImageRecord).request?.prompt).toBe('scene, quality');
+  });
+  it('已清空、被淘汰的记录及 ComfyUI 记录不会被 NAI 快照补写', () => {
+    const id = image('comfyui');
+    patchImageRequest(id, snapshot());
+    expect((records[0] as ImageRecord).request).toBeNull();
+    clearHistory();
+    expect(() => patchImageRequest(id, snapshot())).not.toThrow();
+    expect(records).toHaveLength(0);
+  });
 });
 
 describe('环形缓冲', () => {

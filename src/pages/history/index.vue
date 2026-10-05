@@ -96,7 +96,31 @@ function segments(record: HistoryRecord): Segment[] {
     if (record.response) out.push({ label: '返回', text: record.response });
     return out;
   }
-  const out: Segment[] = [{ label: '正向提示词', text: record.prompt }];
+  if (record.request) {
+    const request = record.request;
+    const out: Segment[] = [
+      { label: '最终正向提示词（实际发送）', text: request.prompt },
+      { label: '最终负面提示词（实际发送）', text: request.negative || '（空）' },
+    ];
+    if (request.baseCaption !== undefined && request.baseCaption !== request.prompt) {
+      out.push({ label: 'V4 主提示词（实际发送）', text: request.baseCaption || '（空）' });
+    }
+    if (request.negativeCaption !== undefined && request.negativeCaption !== request.negative) {
+      out.push({ label: 'V4 主负面（实际发送）', text: request.negativeCaption || '（空）' });
+    }
+    for (const character of request.characters) {
+      out.push({ label: `角色: ${character.name}（实际发送）`, text: character.prompt });
+      if (character.negative) {
+        out.push({ label: `角色负面: ${character.name}（实际发送）`, text: character.negative });
+      }
+    }
+    out.push({ label: '采样参数（实际发送）', text: JSON.stringify(request.parameters, null, 2) });
+    return out;
+  }
+  const out: Segment[] = [{
+    label: record.backend === 'nai' ? '原始正向输入（未捕获最终请求）' : '正向提示词',
+    text: record.prompt,
+  }];
   if (record.nl) out.push({ label: '自然语言', text: record.nl });
   for (const character of record.characters ?? []) {
     out.push({
@@ -125,6 +149,10 @@ function facts(record: HistoryRecord): string[] {
     }
   } else {
     out.push(`种子 ${record.seed}`, record.size);
+    if (record.request) {
+      const p = record.request.parameters;
+      out.push(`${p.width}×${p.height}`, `${p.steps} 步`, `CFG ${p.scale}`);
+    }
   }
   return out.filter(Boolean);
 }
@@ -218,6 +246,7 @@ function copyAll(record: HistoryRecord): void {
           <li v-for="(seg, i) in segments(record)" :key="i">
             <button
               class="bbi-prompt-open"
+              :class="{ 'is-image': record.kind === 'image' }"
               type="button"
               @click="viewing = { title: `${title(record)} · ${seg.label}`, segment: seg }"
             >
@@ -416,6 +445,32 @@ function copyAll(record: HistoryRecord): void {
 .bbi-prompt-open:hover {
   border-color: var(--bbi-accent);
   background: var(--bbi-surface);
+}
+/* 生图标签需要说明是否实发，分成标签/预览两行，窄屏不挤掉内容。副 API 行保持原布局。 */
+.bbi-prompt-open.is-image {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px;
+  gap: 4px 12px;
+}
+.is-image .bbi-prompt-role {
+  grid-column: 1;
+  width: auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.is-image .bbi-prompt-preview {
+  display: block;
+  grid-column: 1;
+  grid-row: 2;
+}
+.is-image .bbi-prompt-len {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+.is-image .bbi-prompt-edit {
+  grid-column: 3;
+  grid-row: 1 / 3;
 }
 /* 角色标签 = 这段提示词的身份,与设置页 .bbi-prompt-name 同口径:走 --bbi-ink。
    定宽让各行预览的左边缘对齐成一条线。

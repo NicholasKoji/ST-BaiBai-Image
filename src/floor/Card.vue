@@ -35,7 +35,7 @@ import {
 } from '@/floor/storage';
 import { isTagPlanning } from '@/floor/tagPlanState';
 import { activeComfyPreset, settings } from '@/state/settings';
-import { beginImage, failImage, finishImage, safeHistory } from '@/state/history';
+import { beginImage, failImage, finishImage, patchImageRequest, safeHistory } from '@/state/history';
 import { copyText } from '@/st/clipboard';
 import { getContext } from '@/st/context';
 import { formatPromptText } from '@/st/imageTagRegex';
@@ -279,6 +279,9 @@ async function generate(): Promise<void> {
     // 闸门、后端分派都在 generateImage 里(公开接口走同一条路,见 generate.ts);
     // 本组件只把进度回调接到自己的槽位运行态上。
     const { result } = await generateImage({ ...job, seed }, signal, {
+      onNaiRequest: snapshot => {
+        if (historyId !== null) safeHistory(() => patchImageRequest(historyId!, snapshot));
+      },
       onStart: () => setGenPhase(slot, token, 'generating'),
       onQueue: ahead => setQueueAhead(slot, token, ahead),
       onRetry: retry => setGenRetry(slot, token, retry),

@@ -2,6 +2,7 @@ import { reactive } from 'vue';
 
 import type { ChatMsg } from '@/api/client';
 import type { ImageCharacterPrompt } from '@/autoTag/protocol';
+import type { NaiRequestSnapshot } from '@/backends/nai';
 import type { Orientation } from '@/backends/size';
 
 /**
@@ -77,6 +78,8 @@ export interface ImageRecord extends BaseRecord {
   nl: string;
   negative: string;
   characters: ImageCharacterPrompt[];
+  /** NAI 最终请求快照；排队、发送前失败或旧记录为 null，禁止用当前设置事后补算。 */
+  request: NaiRequestSnapshot | null;
   seed: number;
   size: Orientation;
   /** 楼层坐标:详情里据此指回是哪一楼哪个槽位。图片本身不存(见文件头)。 */
@@ -255,12 +258,43 @@ export function beginImage(info: ImageBegin): number {
       tag: truncate(character.tag),
       nl: truncate(character.nl),
     })),
+    request: null,
     seed: info.seed,
     size: info.size,
     floor: info.floor,
     seq: info.seq,
   });
   return id;
+}
+
+/** 同一条记录补入最终请求，保留原始输入，且不影响调用方的成功/失败判据。 */
+export function patchImageRequest(id: number, snapshot: NaiRequestSnapshot): void {
+  const record = find(id);
+  if (record?.kind !== 'image' || record.backend !== 'nai') return;
+  record.request = {
+    model: truncate(snapshot.model),
+    prompt: truncate(snapshot.prompt),
+    negative: truncate(snapshot.negative),
+    ...(typeof snapshot.baseCaption === 'string' ? { baseCaption: truncate(snapshot.baseCaption) } : {}),
+    ...(typeof snapshot.negativeCaption === 'string' ? { negativeCaption: truncate(snapshot.negativeCaption) } : {}),
+    characters: snapshot.characters.map(character => ({
+      name: truncate(character.name),
+      prompt: truncate(character.prompt),
+      negative: truncate(character.negative),
+    })),
+    parameters: {
+      seed: snapshot.parameters.seed,
+      width: snapshot.parameters.width,
+      height: snapshot.parameters.height,
+      sampler: snapshot.parameters.sampler,
+      steps: snapshot.parameters.steps,
+      scale: snapshot.parameters.scale,
+      cfg_rescale: snapshot.parameters.cfg_rescale,
+      noise_schedule: snapshot.parameters.noise_schedule,
+    },
+  };
+  record.model = record.request.model;
+  record.seed = record.request.parameters.seed;
 }
 
 export function finishImage(id: number): void {

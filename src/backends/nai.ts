@@ -242,6 +242,59 @@ export interface NaiGenerateValues {
   size?: Orientation;
 }
 
+/** 请求体序列化后的调试快照。只留提示词和采样参数，不含地址、密钥或参考图数据。 */
+export interface NaiRequestSnapshot {
+  model: string;
+  prompt: string;
+  negative: string;
+  /** V4 caption 原文，若与顶层字段不同，历史须分别显示而不是假定同源。 */
+  baseCaption?: string;
+  negativeCaption?: string;
+  characters: Array<{ name: string; prompt: string; negative: string }>;
+  parameters: {
+    seed: number;
+    width: number;
+    height: number;
+    sampler: string;
+    steps: number;
+    scale: number;
+    cfg_rescale: number;
+    noise_schedule: string;
+  };
+}
+
+function snapshotNaiRequest(
+  body: { input: string; model: string; parameters: JsonObject },
+  characterNames: string[],
+): NaiRequestSnapshot {
+  const p = body.parameters;
+  type Caption = { caption: { base_caption: string; char_captions: Array<{ char_caption: string }> } };
+  const positive = p.v4_prompt as Caption | undefined;
+  const negative = p.v4_negative_prompt as Caption | undefined;
+  return {
+    model: body.model,
+    prompt: body.input,
+    negative: p.negative_prompt as string,
+    ...(positive ? { baseCaption: positive.caption.base_caption } : {}),
+    ...(negative ? { negativeCaption: negative.caption.base_caption } : {}),
+    characters: (positive?.caption.char_captions ?? []).map((character, i) => ({
+      name: characterNames[i] ?? `角色 ${i + 1}`,
+      prompt: character.char_caption,
+      negative: negative?.caption.char_captions[i]?.char_caption ?? '',
+    })),
+    parameters: {
+      seed: p.seed as number,
+      width: p.width as number,
+      height: p.height as number,
+      sampler: p.sampler as string,
+      steps: p.steps as number,
+      scale: p.scale as number,
+      cfg_rescale: p.cfg_rescale as number,
+      noise_schedule: p.noise_schedule as string,
+    },
+  };
+}
+
 /**
  * 内置画师串配方:只读,**不进 settings**,改它们 = 改这里的常量、发版即生效。
  *
@@ -585,7 +638,10 @@ export async function generateNaiImage(
   nai: NaiSettings,
   values: NaiGenerateValues,
   signal?: AbortSignal,
-  opts: { onRetry?: (info: NaiRetryInfo) => void } = {},
+  opts: {
+    onRetry?: (info: NaiRetryInfo) => void;
+    onRequest?: (snapshot: NaiRequestSnapshot) => void;
+  } = {},
 ): Promise<ComfyImageResult> {
   if (!nai.key.trim()) throw new NaiError('请先填写 NAI API Key');
   if (!values.prompt.trim()) throw new NaiError('正向提示词不能为空');
@@ -624,17 +680,29 @@ export async function generateNaiImage(
     parameters: params,
     use_new_shared_trial: true,
   };
+  // 在回调之前冻结发送内容。只另存小快照，不复制整份请求里的 Vibe 参考图/编码数据。
+  // 两份 JSON 取同一请求的字段，调试回调修改对象或设置也不影响发送内容。
+  const bodyText = JSON.stringify(body);
+  const characterNames = (values.characters ?? []).map(character => character.name);
+  const requestText = JSON.stringify(snapshotNaiRequest(body, characterNames));
   // 只把「发请求 + 解包」包进重试:上面拼参数、读 vibe 数据的活是一次性的,
   // 重跑它们既白费功夫,也会把 vibe 缺编码的 toastr 警告重复弹出来。
   return runNaiWithRetry(
     async () => {
+      if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+      try {
+        opts.onRequest?.(JSON.parse(requestText) as NaiRequestSnapshot);
+      } catch (error) {
+        // 历史只是辅助：记录失败不阻断出图；重试时仍捕获同一请求，而不新增历史记录。
+        console.debug('[柏宝绘] NAI 请求快照记录失败(已忽略)', error);
+      }
       const resp = await fetch(naiEndpoint(nai.url, 'generate-image'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${nai.key.trim()}`,
         },
-        body: JSON.stringify(body),
+        body: bodyText,
         signal,
       });
       if (!resp.ok) throw await naiHttpError(resp, 'NAI 生图失败');

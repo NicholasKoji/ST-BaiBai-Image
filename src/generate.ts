@@ -25,7 +25,7 @@
 import type { ImageCharacterPrompt } from '@/autoTag/protocol';
 import { validateSimpleConfig } from '@/backends/comfyTemplates';
 import { generateComfyImage, randomSeed, type ComfyImageResult } from '@/backends/comfyui';
-import { generateNaiImage, naiRandomSeed, naiSupportsCharacterPrompts } from '@/backends/nai';
+import { generateNaiImage, naiRandomSeed, naiSupportsCharacterPrompts, type NaiRequestSnapshot } from '@/backends/nai';
 import type { Orientation } from '@/backends/size';
 import { acquireNaiSlot } from '@/floor/genQueue';
 import { activeComfyPreset, activeNaiEndpoint, effectiveComfyConn, effectiveNai, settings, type BackendId } from '@/state/settings';
@@ -48,6 +48,8 @@ export interface GenerateInput {
 
 /** 生成过程中的进度上报(卡片用它显示排队位置与退避进度)。 */
 export interface GenerateProgress {
+  /** NAI 每次实际发送前的最终请求快照；不负责登记或完成历史记录。 */
+  onNaiRequest?: (snapshot: NaiRequestSnapshot) => void;
   /** 已取得闸门槽位、请求即将发出(NAI 从「排队中」进入「生成中」的时机)。 */
   onStart?: () => void;
   /** ComfyUI 服务端队列里前面还有几个;null = 未知。 */
@@ -188,7 +190,10 @@ export async function generateImage(
           // naiSupportsCharacterPrompts),在这儿再滤一遍只会多一处会漂的判据
           { prompt: input.prompt, nl: input.nl ?? '', characters, seed: input.seed, size },
           signal,
-          { onRetry: info => progress.onRetry?.({ attempt: info.attempt, max: info.max }) },
+          {
+            onRetry: info => progress.onRetry?.({ attempt: info.attempt, max: info.max }),
+            onRequest: snapshot => progress.onNaiRequest?.(snapshot),
+          },
         )
       : await generateComfyImage(
           effectiveComfyConn(),
