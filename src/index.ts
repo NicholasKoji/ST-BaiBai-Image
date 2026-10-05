@@ -6,6 +6,7 @@ import { injectMenuButton } from '@/menu';
 import { registerPublicInterface } from '@/public/register';
 import { bindCharTagSync } from '@/state/charTags';
 import { initGlobalCharTags } from '@/state/globalCharTags';
+import { bindMvuReferenceSync } from '@/state/mvuReference';
 import { hydrateSettings } from '@/state/settings';
 import { ui } from '@/state/ui';
 import { guardEditableArrowKeys } from '@/st/keyboard';
@@ -99,6 +100,7 @@ async function hydrateWhenReady(attempt = 0) {
       // 全局库必须在 bindCharTagSync 之前初始化:首次重算就要把全局条目合进派生库
       initGlobalCharTags();
       bindCharTagSync();
+      bindMvuReferenceSync();
       ensureImageTagRegexRegistered();
       bindAutoTagging();
       bindFloorHydration();

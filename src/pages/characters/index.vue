@@ -3,6 +3,7 @@ import BbiTextarea from '@/components/BbiTextarea.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import Icon from '@/components/Icon.vue';
 import ModalMask from '@/components/ModalMask.vue';
+import MvuReferencePanel from './MvuReferencePanel.vue';
 import { generateCharTags } from '@/autoTag/charAnchors';
 import { readBookMemory } from '@/autoTag/bookMemory';
 import {
@@ -451,6 +452,8 @@ function sourceLabel(entry: CharTagEntry): string {
         </div>
       </div>
     </div>
+
+    <MvuReferencePanel />
 
     <!-- ===== 角色编辑弹窗 ===== -->
     <ModalMask :open="!!draft" @close="closeEntry">

@@ -461,7 +461,7 @@ tag（JSON 的 tag 键）：danbooru 短 tag——英文小写、逗号分隔的
 同人角色身份 tag：
 - 若角色明确来自已有动漫、游戏、小说等作品，必须在人数/构图之后、普通外貌之前写模型可识别的英文 Danbooru 身份 tag，格式为 character name \\(copyright name\\)。角色名与作品名使用其通行英文 tag，不得直译中文、缩写作品名或只写角色名。
 - ComfyUI 会把未转义圆括号当作权重语法，所以身份 tag 的括号必须转义。实际提示词形态为 character name \\(copyright name\\)；由于最终输出是 JSON，tag 字符串中必须写成 "character name \\\\(copyright name\\\\)"，JSON 解析后才会保留单个反斜杠。
-- 原创角色不写身份 tag；无法从角色卡、世界书或正文可靠确定作品时不得猜测作品名，按原创角色处理。
+- 原创角色不写身份 tag；无法从人物设定、世界背景或正文可靠确定作品时不得猜测作品名，按原创角色处理。
 - 角色固定外貌库条目的 fandom 字段只作档案记录，画图时不照抄它；同人身份 tag 一律按本规范现场判定并转义。
 
 多人画面（两人及以上）额外规则：
@@ -498,7 +498,7 @@ tag（JSON 的 tag 键）：danbooru 短 tag——英文小写、逗号分隔的
    ⚠ 景别与身体 tag 要一致：选了 upper body / close-up 就不要再写鞋袜、裙长、腿部、全身姿态这类画面外看不见的 tag——画面里没有的部位却写了 tag，模型会硬塞一块进去。
 
 2. 时代与世界观（服饰体系、建筑、器物、环境风格）——**必须先判断，并主动具体化**。
-   依据按优先级取：世界设定（世界书）> 角色设定/主角设定 > 正文与上下文中的称谓、身份、器物和环境。
+   依据按优先级取：世界设定（世界背景）> 角色设定/主角设定 > 正文与上下文中的称谓、身份、器物和环境。
    有明确设定时严格遵循；没有明确设定时，也要根据现有线索和剧情气质，主动选择一个最合理、具体且自洽的时代、文明或原创视觉体系。证据较少时可以合理补全时代风格、服装版型、材质、配饰、光线与色调，但这种发挥只限于“怎么画”，不得借机编造“画面里有什么”。
    将判断落实到画面实际可见的细节：人物可见时优先完善服装版型、材质和配饰；背景可见时，只补充设定或正文能够支持的建筑、家具、环境和器物。地形、地面或道路材质、天气痕迹及环境状态都属于场景事实，没有依据时保持简洁，不得为了丰富画面自行添加泥地、土路、湿地、积水、积雪、尘土或湿滑地面。
    正文只确定“野外”时写 outdoors 即可，只确定“森林”时写 forest 即可；只有正文、上下文或世界设定明确支持雨后、泥泞、土路等事实时，才写 muddy ground、dirt path、puddles 等对应 tag。
@@ -587,7 +587,7 @@ NAI 对 danbooru 体系理解最好：人物多的画面务必写清数量 tag�
    ⚠ 景别与身体 tag 要一致：选了 upper body / close-up 就不要再写鞋袜、裙长、腿部、全身姿态这类画面外看不见的 tag——画面里没有的部位却写了 tag，模型会硬塞一块进去。
 
 2. 时代与世界观（服饰体系、建筑、器物、环境风格）——**必须先判断，并主动具体化**。
-   依据按优先级取：世界设定（世界书）> 角色设定/主角设定 > 正文与上下文中的称谓、身份、器物和环境。
+   依据按优先级取：世界设定（世界背景）> 角色设定/主角设定 > 正文与上下文中的称谓、身份、器物和环境。
    有明确设定时严格遵循；没有明确设定时，也要根据现有线索和剧情气质，主动选择一个最合理、具体且自洽的时代、文明或原创视觉体系。证据较少时可以合理补全时代风格、服装版型、材质、配饰、光线与色调，但这种发挥只限于“怎么画”，不得借机编造“画面里有什么”。
    将判断落实到画面实际可见的细节：人物可见时优先完善服装版型、材质和配饰；背景可见时，只补充设定或正文能够支持的建筑、家具、环境和器物。地形、地面或道路材质、天气痕迹及环境状态都属于场景事实，没有依据时保持简洁，不得为了丰富画面自行添加泥地、土路、湿地、积水、积雪、尘土或湿滑地面。
    正文只确定“野外”时写 outdoors 即可，只确定“森林”时写 forest 即可；只有正文、上下文或世界设定明确支持雨后、泥泞、土路等事实时，才写 muddy ground、dirt path、puddles 等对应 tag。
@@ -634,10 +634,10 @@ A. 事实与状态账本
    - 没有明确穿回、整理、换装、解除状态、时间跳跃或场景切换时，不得把临时状态恢复成角色默认值。
 
 B. 角色清点与建档（具体建档字段与写法见任务协议，这里只做清点判断）
-   - 通读目标正文，逐个列出实际在场且有名有姓的角色。不能只看最终入选图片里的人，也不能漏掉世界书、角色卡或柏宝书为其给出了设定的角色。
-   - 每人写一行结论：命中的同名库条目，或本次 field:"new"。只有名字实际列在【角色固定外貌库】区块中的才算已建档——世界书、角色卡、柏宝书或正文里的详细设定只是建档来源，不代表已经在库，不得凭印象宣称已在库。库里没有、但属于正式角色（有设定或持续参与剧情）的，首次出场就建档，不论他是否入选本次图片；一次性无名路人不建。
-   - 同一行里顺带判定原创还是同人：只有角色卡、世界书、正文或通行角色名能可靠指向某个已有作品时才判为同人，证据不足按原创处理，不猜作品。判定为同人时同一行定出最终身份 tag 词：模型可识别的英文 Danbooru 角色名与作品名，实际形态为 character name \\(copyright name\\)；最终 JSON 里要写成 "character name \\\\(copyright name\\\\)"，双反斜杠经 JSON 解析才保留单个反斜杠。
-   - 缺发色、发型或瞳色时一次性补全：hair 必须同时带发色和长度/发型（long black hair 行，只写 black hair 这种裸颜色不行），eyes 必须带瞳色；建档在本楼全程有效，不要对同一角色给出两套外貌。
+   - 通读目标正文，逐个列出实际在场且有名有姓的角色。不能只看最终入选图片里的人，也不能漏掉世界背景、人物设定或人物状态参考为其给出了设定的角色。
+   - 每人写一行结论：命中的同名库条目，或本次 field:"new"。只有名字实际列在【角色固定外貌库】区块中的才算已建档——世界背景、人物设定、人物状态参考或正文里的详细设定只是建档来源，不代表已经在库，不得凭印象宣称已在库。库里没有、但属于正式角色（有设定或持续参与剧情）的，首次出场就建档，不论他是否入选本次图片；一次性无名路人不建。
+   - 同一行里顺带判定原创还是同人：只有人物设定、世界背景、正文或通行角色名能可靠指向某个已有作品时才判为同人，证据不足按原创处理，不猜作品。判定为同人时同一行定出最终身份 tag 词：模型可识别的英文 Danbooru 角色名与作品名，实际形态为 character name \\(copyright name\\)；最终 JSON 里要写成 "character name \\\\(copyright name\\\\)"，双反斜杠经 JSON 解析才保留单个反斜杠。
+   - 缺发色、发型或瞳色时一次性补全：hair 必须同时带发色和长度/发型（long black hair 行，只写 black hair 这种裸颜色不行），eyes 必须带瞳色；建档在这段故事全程有效，不要对同一角色给出两套外貌。
    - 对照角色库检查永久变化：染发、剪发、永久变身等写入 changes 并标出生效 P编号；假发、美瞳、湿发、光照变色等临时状态不写。即使 images 为空也不能跳过这一步。
 
 C. 服装时间线（每个在场角色一行：从 P 几起穿的是什么）
@@ -687,7 +687,7 @@ E. 选段
    - 这一层只核对、不改决定：发现问题就在落 tag 时直接改对，不要在思考里写出「超限，需精简」「让位」「改为」这类修订过程。张数在 E 段就已经定死，这里不该再变。
    - 每个同人角色的 tag 串里都有 B 段定下的 character name \\(copyright name\\) 身份 tag（人数/构图之后、普通外貌之前，括号已转义），原创角色没有被误加作品名。
    - 若本图协议含 negative 键：negative 已逐词对照本图的 tag 与 nl，凡是能在其中找到对应内容的词都已删掉，没有抵消正文已成立的事实；拿不准的已留空。协议不含 negative 键时本项直接跳过。
-   - 每个在场正式角色都能二选一：指出【角色固定外貌库】中的同名条目，或在 changes 中有 field:"new"；世界书里有详细设定不能代替建档。每条 field:"new" 建档的 hair 都同时带发色和长度/发型、eyes 都带瞳色。永久变化的 P编号合法，临时状态没被误写进 changes。
+   - 每个在场正式角色都能二选一：指出【角色固定外貌库】中的同名条目，或在 changes 中有 field:"new"；世界背景里有详细设定不能代替建档。每条 field:"new" 建档的 hair 都同时带发色和长度/发型、eyes 都带瞳色。永久变化的 P编号合法，临时状态没被误写进 changes。
    - 张数在设定范围内；仅当下限为 0 且确实无可画时 images 才为空，且无论如何都保留应有的建档与 changes。`;
 
 /**
@@ -713,10 +713,10 @@ A. 事实与状态账本
    - 没有明确穿回、整理、换装、解除状态、时间跳跃或场景切换时，不得把临时状态恢复成角色默认值。
 
 B. 角色清点与建档（具体建档字段与写法见任务协议，这里只做清点判断）
-   - 通读目标正文，逐个列出实际在场且有名有姓的角色。不能只看最终入选图片里的人，也不能漏掉世界书、角色卡或柏宝书为其给出了设定的角色。
-   - 每人写一行结论：命中的同名库条目，或本次 field:"new"。只有名字实际列在【角色固定外貌库】区块中的才算已建档——世界书、角色卡、柏宝书或正文里的详细设定只是建档来源，不代表已经在库，不得凭印象宣称已在库。库里没有、但属于正式角色（有设定或持续参与剧情）的，首次出场就建档，不论他是否入选本次图片；一次性无名路人不建。
-   - 同一行里顺带判定原创还是同人：只有角色卡、世界书、正文或通行角色名能可靠指向某个已有作品时才判为同人，证据不足按原创处理，不猜作品。判定为同人时同一行定出最终身份 tag 词：模型可识别的英文 Danbooru 角色名与作品名，格式 character name (copyright name)，不转义圆括号，写在人数/构图之后、普通外貌之前。
-   - 缺发色、发型或瞳色时一次性补全：hair 必须同时带发色和长度/发型（long black hair 行，只写 black hair 这种裸颜色不行），eyes 必须带瞳色；建档在本楼全程有效，不要对同一角色给出两套外貌。
+   - 通读目标正文，逐个列出实际在场且有名有姓的角色。不能只看最终入选图片里的人，也不能漏掉世界背景、人物设定或人物状态参考为其给出了设定的角色。
+   - 每人写一行结论：命中的同名库条目，或本次 field:"new"。只有名字实际列在【角色固定外貌库】区块中的才算已建档——世界背景、人物设定、人物状态参考或正文里的详细设定只是建档来源，不代表已经在库，不得凭印象宣称已在库。库里没有、但属于正式角色（有设定或持续参与剧情）的，首次出场就建档，不论他是否入选本次图片；一次性无名路人不建。
+   - 同一行里顺带判定原创还是同人：只有人物设定、世界背景、正文或通行角色名能可靠指向某个已有作品时才判为同人，证据不足按原创处理，不猜作品。判定为同人时同一行定出最终身份 tag 词：模型可识别的英文 Danbooru 角色名与作品名，格式 character name (copyright name)，不转义圆括号，写在人数/构图之后、普通外貌之前。
+   - 缺发色、发型或瞳色时一次性补全：hair 必须同时带发色和长度/发型（long black hair 行，只写 black hair 这种裸颜色不行），eyes 必须带瞳色；建档在这段故事全程有效，不要对同一角色给出两套外貌。
    - 对照角色库检查永久变化：染发、剪发、永久变身等写入 changes 并标出生效 P编号；假发、美瞳、湿发、光照变色等临时状态不写。即使 images 为空也不能跳过这一步。
 
 C. 服装时间线（每个在场角色一行：从 P 几起穿的是什么）
@@ -766,7 +766,7 @@ E. 选段
    - 这一层只核对、不改决定：发现问题就在落 tag 时直接改对，不要在思考里写出「超限，需精简」「让位」「改为」这类修订过程。张数在 E 段就已经定死，这里不该再变。
    - 每个同人角色的 tag 串里都有 B 段定下的 character name (copyright name) 身份 tag（人数/构图之后、普通外貌之前，不转义括号），原创角色没有被误加作品名。
    - 若本图是显式 NSFW 场景：实际可见的性器官、身体部位和接触关系都已用准确 tag 写明，没有只用 nsfw、nude、sex 这类泛化词一笔带过；非显式场景本项直接跳过。
-   - 每个在场正式角色都能二选一：指出【角色固定外貌库】中的同名条目，或在 changes 中有 field:"new"；世界书里有详细设定不能代替建档。每条 field:"new" 建档的 hair 都同时带发色和长度/发型、eyes 都带瞳色。永久变化的 P编号合法，临时状态没被误写进 changes。
+   - 每个在场正式角色都能二选一：指出【角色固定外貌库】中的同名条目，或在 changes 中有 field:"new"；世界背景里有详细设定不能代替建档。每条 field:"new" 建档的 hair 都同时带发色和长度/发型、eyes 都带瞳色。永久变化的 P编号合法，临时状态没被误写进 changes。
    - 张数在设定范围内；仅当下限为 0 且确实无可画时 images 才为空，且无论如何都保留应有的建档与 changes。`;
 
 /**
@@ -790,15 +790,15 @@ A. 事实与状态账本
    - 没有明确穿回、整理、换装、解除状态、时间跳跃或场景切换时，不得把临时状态恢复成角色默认值。
 
 B. 角色清点与建档（具体建档字段与写法见任务协议，这里只做清点判断）
-   - 通读目标正文，逐个列出实际在场的**全部**角色——有名有姓的和只有指称的（三年级队长、店主）都要列，不能只看最终入选图片里的人，也不能漏掉世界书、角色卡或柏宝书为其给出了设定的角色。清点的是「谁在场」，不是「谁有档案」。
+   - 通读目标正文，逐个列出实际在场的**全部**角色——有名有姓的和只有指称的（三年级队长、店主）都要列，不能只看最终入选图片里的人，也不能漏掉世界背景、人物设定或人物状态参考为其给出了设定的角色。清点的是「谁在场」，不是「谁有档案」。
    - 每人写一行结论，先标出他属于哪一类，档案与外貌来源按这个类别处理，入画取舍另按 E 段判断：
-     · 【已建档】命中【角色固定外貌库】中的同名条目——只有名字实际列在该区块中的才算已建档，世界书、角色卡、柏宝书或正文里的详细设定只是建档来源，不代表已经在库，不得凭印象宣称已在库；
+     · 【已建档】命中【角色固定外貌库】中的同名条目——只有名字实际列在该区块中的才算已建档，世界背景、人物设定、人物状态参考或正文里的详细设定只是建档来源，不代表已经在库，不得凭印象宣称已在库；
      · 【本次建档】库里没有、但属于正式角色（有设定或持续参与剧情），首次出场就建档，不论他是否入选本次图片，本次输出 field:"new"；
      · 【一次性】正文只给了指称、没有设定、不持续参与剧情的一次性角色——不建档、不写 changes、不进库。这一类**照常可以入画**：入选画面时按后端规范给他写一条仅本图有效的角色块，name 用正文的指称原词，外貌按世界观一次性补全，绝不为他编造人名。
    - 清点名单不是入画名单：这里列全是为了核对在场事实与建档，谁入镜由 E 段按主体和核心互动决定，【一次性】不因缺档被排除，任何角色也不因在场或已建档就必须入画。正文把一群人当作整体的（人群、士兵们、围观的学生），列成一行「人群」即可；选入镜头后才留在 Base，不占角色块，拿不准是个体还是一团时按一团处理。
-   - 名字一律用原文（【已建档】【本次建档】两类）：field:"new" 建档的 name 必须与角色卡/世界书/柏宝书/正文中该角色的名字逐字相同，中文名写中文（小雪，不写 Xiaoxue 也不意译）；引用已建档角色时，characters[].name 与 tag/nl 里出现的名字同样照抄档案里的原名字，不得音译、翻译或变体——插件按名字逐字匹配，名字对不上档案或正文，锚定就会断开。【一次性】角色不参与任何匹配，用正文的指称原词作 name 即可，这条不适用于他。
-   - 同一行里顺带判定原创还是同人（仅对【已建档】【本次建档】两类做）：只有角色卡、世界书、正文或通行角色名能可靠指向某个已有作品时才判为同人，证据不足按原创处理，不猜作品。判定为同人时同一行定出最终身份 tag 词：模型可识别的英文 Danbooru 角色名与作品名，格式 character name (copyright name)，不转义圆括号。身份 tag 必须写进档案：本次 field:"new" 建档的写进 fields.fandom；已建档但档案缺 fandom 的补一条 field:"fandom" 的 changes；档案已有 fandom 的直接照抄。画图时逐字放在该角色 characters[].tag 的首位，不得放进 Base。原创角色档案不写 fandom。【一次性】角色不判同人、不写 fandom。
-   - 缺发色、发型或瞳色时一次性补全：hair 必须同时带发色和长度/发型（long black hair 行，只写 black hair 这种裸颜色不行），eyes 必须带瞳色；建档在本楼全程有效，不要对同一角色给出两套外貌。【一次性】角色入画时同样要有发色与瞳色，只是补在他的角色块里、不进档案；未入画不补外貌，同一楼里他若出现在两张图，两张用同一套外貌。
+   - 名字一律用原文（【已建档】【本次建档】两类）：field:"new" 建档的 name 必须与人物设定/世界背景/人物状态参考/正文中该角色的名字逐字相同，中文名写中文（小雪，不写 Xiaoxue 也不意译）；引用已建档角色时，characters[].name 与 tag/nl 里出现的名字同样照抄档案里的原名字，不得音译、翻译或变体——插件按名字逐字匹配，名字对不上档案或正文，锚定就会断开。【一次性】角色不参与任何匹配，用正文的指称原词作 name 即可，这条不适用于他。
+   - 同一行里顺带判定原创还是同人（仅对【已建档】【本次建档】两类做）：只有人物设定、世界背景、正文或通行角色名能可靠指向某个已有作品时才判为同人，证据不足按原创处理，不猜作品。判定为同人时同一行定出最终身份 tag 词：模型可识别的英文 Danbooru 角色名与作品名，格式 character name (copyright name)，不转义圆括号。身份 tag 必须写进档案：本次 field:"new" 建档的写进 fields.fandom；已建档但档案缺 fandom 的补一条 field:"fandom" 的 changes；档案已有 fandom 的直接照抄。画图时逐字放在该角色 characters[].tag 的首位，不得放进 Base。原创角色档案不写 fandom。【一次性】角色不判同人、不写 fandom。
+   - 缺发色、发型或瞳色时一次性补全：hair 必须同时带发色和长度/发型（long black hair 行，只写 black hair 这种裸颜色不行），eyes 必须带瞳色；建档在这段故事全程有效，不要对同一角色给出两套外貌。【一次性】角色入画时同样要有发色与瞳色，只是补在他的角色块里、不进档案；未入画不补外貌，同一楼里他若出现在两张图，两张用同一套外貌。
    - 对照角色库检查永久变化：染发、剪发、永久变身等写入 changes 并标出生效 P编号；假发、美瞳、湿发、光照变色等临时状态不写。即使 images 为空也不能跳过这一步。
 
 C. 服装时间线（B 段列出的【已建档】【本次建档】角色各一行：从 P 几起穿的是什么）
@@ -860,7 +860,7 @@ V5 的一张图 = 一个 Base 块 + 每个本图可见的个体角色各一块�
    - 这一层只核对、不改决定：发现问题就在落 tag 时直接改对，不要在思考里写出「超限，需精简」「让位」「改为」这类修订过程。张数在 E 段就已经定死，这里不该再变。
    - 每个同人角色的身份 tag 都逐字照抄自档案 fandom 字段、在其 characters[].tag 的首位，没有放进 Base；同人角色的档案都带 fandom（本次建档或 field:"fandom" 补档），原创角色档案没有 fandom、没有被误加作品名。
    - 若本图是显式 NSFW 场景：可见解剖部位都在所属角色的 tag 里、多人共担的性行为与整体接触在 Base，没有只写泛化 NSFW 词；非显式场景本项直接跳过。
-   - 每个在场角色都能三选一：指出【角色固定外貌库】中的同名条目、在 changes 中有 field:"new"、或标为【一次性】（不建档不写 changes，入画时才在他自己的角色块里补外貌）；世界书里有详细设定不能代替建档。每条 field:"new" 建档的 hair 都同时带发色和长度/发型、eyes 都带瞳色。【一次性】角色没有被写进 changes——写进去就是错的。永久变化的 P编号合法，临时状态没被误写进 changes。
+   - 每个在场角色都能三选一：指出【角色固定外貌库】中的同名条目、在 changes 中有 field:"new"、或标为【一次性】（不建档不写 changes，入画时才在他自己的角色块里补外貌）；世界背景里有详细设定不能代替建档。每条 field:"new" 建档的 hair 都同时带发色和长度/发型、eyes 都带瞳色。【一次性】角色没有被写进 changes——写进去就是错的。永久变化的 P编号合法，临时状态没被误写进 changes。
    - 画面保持 E 段选定的主体和核心互动，没有为了减人数破坏核心互动，也没有把无关在场者补进画面；缺档未成为放弃画面或裁掉必要参与者的理由。取景框内每个可见的个体都有自己的角色块，入画的人群留在 Base；镜头外的人不写入 tag/nl/characters，Base 人数只计取景框内可见的人。
    - 张数在设定范围内；仅当下限为 0 且确实无可画时 images 才为空，且无论如何都保留应有的建档与 changes。`;
 
@@ -884,7 +884,7 @@ Each image must contain:
 
 Character Prompt rules:
 1. tag uses English danbooru tags for that character's identity, sex, fixed appearance, current outfit, expression, gaze, pose, action, visible anatomy, and necessary relative position. Use girl/boy rather than 1girl/2girls; numeric counts belong only in Base. Expression and gaze are mandatory for every character and must use real danbooru tags rather than invented descriptive phrases: pick expressions from smile, grin, laughing, blush, embarrassed, frown, pout, puffy cheeks, surprised, crying, tears, angry, serious, sad, worried, scared, smug, seductive smile, expressionless, half-closed eyes, open mouth, clenched teeth; pick one gaze from looking at viewer, looking at another, looking away, looking down, looking up, looking back, closed eyes. Write smile rather than gentle smile and blush rather than shy expression; phrases like neutral curious expression are not tags and only dilute the prompt. Save adjectival nuance for nl. When the story does not state an expression, infer one; write expressionless explicitly rather than omitting it.
-2. First decide whether the named character is an original character or a fandom character. Treat a character as fandom only when the character card, lorebook, story, or an unambiguous well-known name reliably identifies an existing anime, game, novel, or other work. If the work is uncertain, do not guess; treat the character as original.
+2. First decide whether the named character is an original character or a fandom character. Treat a character as fandom only when the character description, world background, story, or an unambiguous well-known name reliably identifies an existing anime, game, novel, or other work. If the work is uncertain, do not guess; treat the character as original.
 3. For every fandom character, the model-recognized English Danbooru identity tag, formatted exactly as character name (copyright name), must be the first tag in that character's tag. The identity tag is stored in the fixed appearance library: when creating the entry (changes field:"new"), register it as the fields.fandom of that entry; when an existing entry lacks it and the character is fandom, add it via a changes item with field:"fandom"; then copy it verbatim every time. Do not escape the parentheses for NovelAI, do not translate the names literally, do not abbreviate the copyright, and do not put this per-character identity tag in Base. Original characters receive no copyright identity tag and no fandom field.
 4. For an explicit NSFW scene. Do not rely on vague tags such as nsfw, nude, or sex: name each actually visible, action-relevant anatomical feature or genital in the owning character's tag, such as breasts, nipples, penis, pussy, anus, or testicles. Do not claim fully covered or out-of-frame anatomy is visible.
 5. Put the shared sexual act and overall contact in Base. Use source# / target# / mutual# tags in Character Prompts when they clarify who acts, which body part is involved, and who or what receives the action. The tags must describe the exact visible contact rather than euphemize it.
@@ -896,7 +896,7 @@ Character Prompt rules:
 
 Name consistency (critical — the plugin matches names verbatim):
 - Scope: these rules govern characters who have a library entry or are being registered in this output. They exist to protect verbatim matching against the library. A one-off character from rule 9 participates in no matching at all, so these rules do not apply to them — using a story term such as 三年级队长 as their name breaks nothing.
-- First-time registration: when you register a character via changes field:"new", the name must be exactly the name used for that character in the character card, lorebook, book memory, or story text — a Chinese name stays Chinese (小雪, never Xiaoxue or Snow). Never transliterate, translate, or pinyin-ize a name.
+- First-time registration: when you register a character via changes field:"new", the name must be exactly the name used for that character in the character description, world background, character state reference, or story text — a Chinese name stays Chinese (小雪, never Xiaoxue or Snow). Never transliterate, translate, or pinyin-ize a name.
 - Existing profiles: when a character already has a library entry (or was just registered above), every reference to that character — characters[].name and any name appearing inside a tag or nl — must match the library entry name verbatim. A library entry written 小雪 must be referenced as 小雪, not as Xiaoxue or any other variant. A mismatched name can never be matched or replaced by the plugin, and the character loses its fixed appearance.
 
 Both Base and Character Prompts must use Tag + English natural language. Write nl in English even when the story text and your own thinking are in another language: the image model reads English natural language far more reliably, and non-English sentences also cost several times more tokens against the shared prompt budget. Character names are the only exception: they must stay in their original language and spelling (see Name consistency above). Tags stabilize identity and attributes; natural language supplies complex relations and spatial semantics. Do not output quality tags, generic negative tags, artist presets, or XML. The backend adds artist and quality tags.
@@ -911,7 +911,7 @@ The story text is prose, not a shot list. It will never state camera, lighting, 
    - Keep body tags consistent with the shot distance. Having chosen upper body or close-up, do not then write shoes, socks, skirt length, legs, or full-body poses in any Character Prompt: tagging a body part that is outside the frame makes the model force it back in.
 
 2. Period and worldview (costume system, architecture, objects, environmental style) must be decided first and then made concrete.
-   Take evidence in priority order: lorebook world settings > character/persona settings > the forms of address, identities, objects, and environment in the story and context. Follow explicit settings strictly. Where nothing is specified, still actively choose one coherent, specific period, civilization, or original visual system that fits the available clues and the tone. With thin evidence you may reasonably supply period style, garment cut, material, accessories, lighting, and color — but this freedom covers only how it is drawn, never what is present.
+   Take evidence in priority order: world background > character/persona settings > the forms of address, identities, objects, and environment in the story and context. Follow explicit settings strictly. Where nothing is specified, still actively choose one coherent, specific period, civilization, or original visual system that fits the available clues and the tone. With thin evidence you may reasonably supply period style, garment cut, material, accessories, lighting, and color — but this freedom covers only how it is drawn, never what is present.
    Terrain, ground or road material, traces of weather, and environmental state are all scene facts. With no supporting evidence, keep them simple: never add muddy ground, dirt path, wetland, puddles, snow, dust, or slippery ground just to enrich the picture. When the story establishes only "outdoors", write outdoors; only "forest", write forest. Write muddy ground, dirt path, or puddles only when the story, the context, or the world settings explicitly support rain, mud, or a dirt road.
    A fictional world may use an original or blended style, but it must stay internally consistent; do not stack conflicting civilizations. Keep the same visual judgment across a continuous scene. Enrich a picture through camera, composition, lighting, color, and evidenced specifics rather than by mechanically stuffing style keywords into every image.
 

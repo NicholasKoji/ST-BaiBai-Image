@@ -58,7 +58,7 @@ describe('buildSlotTaskNote', () => {
   it('单张楼只有说明,没有其余画面清单', () => {
     const note = buildSlotTaskNote(tag('1girl, sunset'), 0);
     expect(note).toContain('【本次只重写第 1 张的提示词】');
-    expect(note).not.toContain('本楼其余画面');
+    expect(note).not.toContain('同一故事片段的其余画面');
     // 单张楼照样要给锚点
     expect(note).toContain('1girl, sunset');
   });
@@ -66,7 +66,7 @@ describe('buildSlotTaskNote', () => {
   it('正文里没有 tag 时不抛错,也不编造锚点(边界容忍)', () => {
     const note = buildSlotTaskNote('纯正文', 0);
     expect(note).toContain('【本次只重写第 1 张的提示词】');
-    expect(note).not.toContain('本楼其余画面');
+    expect(note).not.toContain('同一故事片段的其余画面');
     expect(note).not.toContain('这一张当前的提示词');
   });
 

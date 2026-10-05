@@ -58,7 +58,7 @@ export function buildSlotTaskNote(rawSource: string, seq: number, maxSummary = M
     lines.push('', '这一张当前的提示词（要重写的就是它，画面以它为准）：', current);
   }
   if (occupied.length) {
-    lines.push('', '本楼其余画面（它们各自的提示词已经确定，不要把它们的画面抢过来，也不要改动它们）：', ...occupied);
+    lines.push('', '同一故事片段的其余画面（它们各自的提示词已经确定，不要把它们的画面抢过来，也不要改动它们）：', ...occupied);
   }
   return lines.join('\n');
 }

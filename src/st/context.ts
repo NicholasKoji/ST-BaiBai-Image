@@ -14,6 +14,8 @@ export interface STMessage {
   swipe_id?: number;
   send_date?: string;
   extra?: Record<string, unknown>;
+  /** Tavern Helper message variables, indexed by swipe. Read-only in this extension. */
+  variables?: Array<Record<string, unknown>> | Record<number, Record<string, unknown>>;
 }
 
 /**

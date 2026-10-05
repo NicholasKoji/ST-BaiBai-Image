@@ -1,6 +1,8 @@
 import { requestCompletion, requestViaMainApi } from '@/api/client';
 import { naiSupportsCharacterPrompts } from '@/backends/nai';
 import { readBookMemory } from '@/autoTag/bookMemory';
+import { readMvuReference } from '@/autoTag/mvu';
+import { getMvuReferenceConfig } from '@/state/mvuReference';
 import {
   applyPositionedCharRefs,
   resolveCharAnchors,
@@ -101,6 +103,8 @@ function textHash(text: string): string {
 }
 
 interface RunOptions {
+  /** Pre-generation persisted data: a continuation must wait for its replacement, not use old state. */
+  mvuBefore?: Record<string, unknown>;
   /** 手动触发(楼层按钮):绕过 autoTag.enabled 与 processed 去重;空结果也给出反馈。 */
   manual?: boolean;
   /** 重新生成:先把已有 tag 从正文剔除再分析/注入;旧图片保留在卡片历史里。 */
@@ -296,6 +300,11 @@ async function runForFloor(floor: number, opts: RunOptions = {}): Promise<void> 
   running.set(runKey, controller);
 
   try {
+    const mvuConfig = getMvuReferenceConfig(context);
+    const mvu = mvuConfig.enabled
+      ? await readMvuReference(context, floor, mvuConfig.paths, { signal: controller.signal, waitMs: 30_000, previousData: opts.mvuBefore })
+      : { text: '', missing: [] };
+    if (mvu.missing.length) toastr.warning(`${mvu.missing.length} 项已选 MVU 字段在本次正文中不存在，未发送这些字段。可在角色管理中检查。`, '柏宝绘');
     const memory = readBookMemory(floor, context.chat[floor]?.mes ?? '', context.name1);
     // 单槽重写:库文本要包含本楼已落档的增量(首次全量分析建的档),否则 AI 会把
     // 已建档角色当新人重写。charTagsBeforeFloor(floor + 1) 正好含本楼(swipe 匹配时生效)。
@@ -318,6 +327,7 @@ async function runForFloor(floor: number, opts: RunOptions = {}): Promise<void> 
       preparedTarget,
       anchors.text,
       slot ? buildSlotTaskNote(rawSource, slot.seq) : '',
+      mvu.text,
     );
     const channel = getTagGenChannel();
     // 失败重试:请求异常与「返回无法解析/校验不通过」都视为可重试的异常(后者常见于模型没遵守协议);
@@ -586,14 +596,14 @@ function cancelAll(): void {
   running.clear();
 }
 
-function scheduleForGeneratedFloor(floor: number, chatId: string): void {
+function scheduleForGeneratedFloor(floor: number, chatId: string, mvuBefore?: Record<string, unknown>): void {
   diagnostic('schedule', { floor, chatId });
   const timer = setTimeout(() => {
     scheduled.delete(timer);
     const currentChatId = getContext()?.getCurrentChatId?.() ?? '';
     diagnostic('schedule:fire', { floor, chatId, currentChatId, sameChat: currentChatId === chatId });
     if (currentChatId !== chatId) return;
-    void runForFloor(floor);
+    void runForFloor(floor, { mvuBefore });
   }, 0);
   scheduled.add(timer);
 }
@@ -647,6 +657,7 @@ export function bindAutoTagging(): void {
     return;
   }
   bound = true;
+  const mvuBeforeGeneration = new Map<number, Record<string, unknown>>();
 
   diagnostic('bind', {
     generationStarted: events.GENERATION_STARTED,
@@ -664,6 +675,14 @@ export function bindAutoTagging(): void {
       );
       diagnostic('GENERATION_STARTED', { chatId, type, dryRun, eligible, options });
       beginGeneration(chatId, type, dryRun);
+      if (eligible) {
+        mvuBeforeGeneration.clear();
+        const current = getContext();
+        if (current && getMvuReferenceConfig(current).enabled) current.chat.forEach((message, floor) => {
+          const data = message.variables?.[message.swipe_id ?? 0]?.stat_data;
+          if (data && typeof data === 'object' && !Array.isArray(data)) mvuBeforeGeneration.set(floor, data as Record<string, unknown>);
+        });
+      }
     },
   );
   context.eventSource.on(events.CHARACTER_MESSAGE_RENDERED, (messageId: unknown, type: unknown) => {
@@ -677,7 +696,8 @@ export function bindAutoTagging(): void {
       return;
     }
     // Do not block ST finalization, and pin the deferred run to the originating chat.
-    scheduleForGeneratedFloor(floor, chatId);
+    scheduleForGeneratedFloor(floor, chatId, mvuBeforeGeneration.get(floor));
+    mvuBeforeGeneration.clear();
   });
   if (events.GENERATION_ENDED) {
     context.eventSource.on(events.GENERATION_ENDED, (...args: unknown[]) => {
@@ -689,10 +709,12 @@ export function bindAutoTagging(): void {
     context.eventSource.on(events.GENERATION_STOPPED, (...args: unknown[]) => {
       diagnostic('GENERATION_STOPPED', { args });
       clearGeneration();
+      mvuBeforeGeneration.clear();
     });
   }
   context.eventSource.on(events.CHAT_CHANGED, (...args: unknown[]) => {
     diagnostic('CHAT_CHANGED', { args, currentChatId: getContext()?.getCurrentChatId?.() ?? '' });
     cancelAll();
+    mvuBeforeGeneration.clear();
   });
 }

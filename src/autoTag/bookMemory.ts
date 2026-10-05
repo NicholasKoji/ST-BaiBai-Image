@@ -140,7 +140,7 @@ function formatSnapshotRoles(
 
 /* ============ 文本包装 ============ */
 
-const ROLE_NOTE = '【角色参考(柏宝书同步的最新状态,只读参考)】\n';
+const ROLE_NOTE = '【人物状态参考(只读参考)】\n';
 
 function buildMemoryText(roles: string): string {
   return `${ROLE_NOTE}${roles}`;

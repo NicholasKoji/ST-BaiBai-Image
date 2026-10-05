@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildAutoTagMessages } from '@/autoTag/prompt';
-import { emptyPromptPresetLibrary, savePromptPreset } from '@/state/promptPresets';
+import {
+  BUILTIN_STORY_IMAGE_PRESET_ID,
+  emptyPromptPresetLibrary,
+  savePromptPreset,
+} from '@/state/promptPresets';
 import {
   activeComfyPreset,
   settings,
@@ -83,13 +87,13 @@ describe('auto tag prompt', () => {
     expect(messages.some(m => m.content.includes('"field":"new"'))).toBe(true);
     expect(messages.some(m => m.content.includes('"hair":"long black hair","eyes":"blue eyes"'))).toBe(true);
     expect(messages.some(m => m.content.includes('首次出场就必须建档'))).toBe(true);
-    expect(messages.some(m => m.content.includes('角色卡、世界书、柏宝书或持续剧情'))).toBe(true);
+    expect(messages.some(m => m.content.includes('人物设定、世界背景、人物状态参考或持续剧情'))).toBe(true);
     expect(messages.some(m => m.content.includes('hair 与 eyes 必填'))).toBe(true);
     expect(messages.some(m => m.content.includes('"position":"P2"'))).toBe(true);
     expect(messages.some(m => m.content.includes('后续不得重新随机'))).toBe(true);
     // 建档不受入选与否影响,也不受位置门控 —— 这两条是修复的核心,措辞必须在协议里
     expect(messages.some(m => m.content.includes('不论他是否入选本次图片'))).toBe(true);
-    expect(messages.some(m => m.content.includes('建档在本楼全程有效'))).toBe(true);
+    expect(messages.some(m => m.content.includes('建档在这段故事全程有效'))).toBe(true);
     // 已撤销的 characters 审计:不得回流到协议里
     expect(messages.some(m => m.content.includes('characters'))).toBe(false);
     expect(messages.some(m => m.content.includes('"tag":"@小雪'))).toBe(false);
@@ -192,7 +196,7 @@ describe('auto tag prompt', () => {
     expect(user.content).not.toContain('隐藏思维');
     expect(user.content).not.toContain('状态栏');
     expect(user.content).not.toContain('尾部状态');
-    expect(user.content).not.toContain('上下文楼层');
+    expect(user.content).not.toContain('上下文故事片段');
     expect(user.content).toContain('当前目标楼 ⟦P1⟧');
     expect(user.content).not.toContain('上一个 AI 楼 ⟦P');
   });
@@ -244,7 +248,7 @@ describe('auto tag prompt', () => {
     expect(thinkingMsg?.content).toContain('只跳过没有视觉变化的对话');
     expect(thinkingMsg?.content).toContain('首次出场就建档');
     expect(thinkingMsg?.content).toContain('不论他是否入选本次图片');
-    expect(thinkingMsg?.content).toContain('建档在本楼全程有效');
+    expect(thinkingMsg?.content).toContain('建档在这段故事全程有效');
     // 建档的 hair 必须带长度/发型:只写颜色的旧措辞会让模型以 black hair 过关。
     expect(thinkingMsg?.content).toContain('hair 必须同时带发色和长度/发型');
     expect(thinkingMsg?.content).not.toContain('hair 与 eyes 都不得留空');
@@ -765,7 +769,7 @@ describe('auto tag prompt', () => {
     );
 
     expect(messages.some(message => message.content.includes('首次出场就必须'))).toBe(true);
-    expect(messages.some(message => message.content.includes('柏宝书本次未提供'))).toBe(false);
+    expect(messages.some(message => message.content.includes('人物状态参考本次未提供'))).toBe(false);
   });
 
   it('uses the dedicated NAI V5 Base and Character Prompt contract', async () => {
@@ -986,6 +990,69 @@ describe('auto tag prompt', () => {
 
 
 describe('selected prompt presets in generation', () => {
+  it('renders the new built-in as independent entries and reuses the configured jailbreak', async () => {
+    const old = settings.defaultBackend;
+    try {
+      settings.defaultBackend = 'nai';
+      const presetLibrary = emptyPromptPresetLibrary();
+      presetLibrary.active.nai = BUILTIN_STORY_IMAGE_PRESET_ID;
+      const options: AutoTagSettings = {
+        ...customOptions(),
+        presetLibrary,
+        prompts: prompts({
+          jailbreak: 'REUSED_JAILBREAK',
+          naiV5Spec: 'REUSED_NAI_SPEC',
+          prefill: '<thinking>REUSED_PREFILL',
+        }),
+      };
+      const messages = await buildAutoTagMessages(
+        context(), 1, options, null, undefined, 'LIBRARY_FACT', undefined,
+        '【人物外貌与衣着参考】END_STATE_FACT',
+      );
+      const text = messages.map(message => message.content).join('\n');
+      expect(messages[0]).toEqual({ role: 'system', content: 'REUSED_JAILBREAK' });
+      expect(text).toContain('REUSED_NAI_SPEC');
+      expect(text).toContain('禁止把片段末尾的脱衣、换装');
+      expect(text).toContain('服装视觉指纹');
+      expect(text.match(/END_STATE_FACT/g)).toHaveLength(1);
+      expect(text.match(/LIBRARY_FACT/g)).toHaveLength(1);
+      expect(text).toContain('【图像规划输出协议】');
+      expect(messages.at(-1)).toEqual({ role: 'assistant', content: '<thinking>REUSED_PREFILL' });
+    } finally { settings.defaultBackend = old; }
+  });
+  it.each(['nai', 'comfyui'] as const)('includes selected state once in builtin %s requests with ordinary labels', async backend => {
+    const old = settings.defaultBackend;
+    try {
+      settings.defaultBackend = backend;
+      const ctx = context(); ctx.characterId = 0; ctx.characters = [{ name: 'Char', avatar: 'x', description: 'CHARACTER_FACT' }];
+      const messages = await buildAutoTagMessages(ctx, 1, { ...customOptions(), presetLibrary: undefined, prompts: prompts() }, null,
+        undefined, undefined, undefined, '【人物外貌与衣着参考】STATE_FACT');
+      const text = messages.map(m => m.content).join('\n');
+      expect(text.match(/STATE_FACT/g)).toHaveLength(1);
+      expect(text).not.toMatch(/柏宝书|柏宝绘|角色卡|世界书|酒馆|MVU|本楼|楼层|lorebook|SillyTavern/);
+      expect(text).toContain('CHARACTER_FACT');
+      expect(text).toContain('面容、体型和标志特征不得缩减');
+    } finally { settings.defaultBackend = old; }
+  });
+  it.each(['{{上下文}}', '{{状态参考}}', 'Only my rules'])('keeps state available without duplication using %s', async content => {
+    const old = settings.defaultBackend;
+    try {
+      settings.defaultBackend = 'nai';
+      const options = customOptions(); options.presetLibrary!.presets[0].entries[2].content = content;
+      const messages = await buildAutoTagMessages(context(), 1, options, null, undefined, undefined, undefined, 'STATE_FACT');
+      expect(messages.map(m => m.content).join('\n').match(/STATE_FACT/g)).toHaveLength(1);
+      expect(options.presetLibrary!.presets[0].entries[2].content).toBe(content);
+      expect(messages.at(-1)?.role).toBe('assistant');
+    } finally { settings.defaultBackend = old; }
+  });
+  it('does not recursively evaluate macros found inside selected state values', async () => {
+    const old = settings.defaultBackend;
+    try {
+      settings.defaultBackend = 'nai';
+      const messages = await buildAutoTagMessages(context(), 1, customOptions(), null, undefined, undefined, undefined, '{{user}}');
+      expect(messages.map(m => m.content).join('\n')).toContain('{{user}}');
+    } finally { settings.defaultBackend = old; }
+  });
   function customOptions(): AutoTagSettings {
     const presetLibrary = emptyPromptPresetLibrary();
     savePromptPreset(presetLibrary, { id: 'custom', backend: 'nai', name: '自定义', entries: [
@@ -1007,7 +1074,7 @@ describe('selected prompt presets in generation', () => {
       expect(messages[0].content).toBe('CUSTOM_RULE 使用自然语言');
       expect(messages.at(-1)).toEqual({ role: 'assistant', content: '<thinking>CUSTOM_PREFILL' });
       for (const removed of ['OLD_SYSTEM', 'OLD_SPEC', 'OLD_THINK', 'OLD_PREFILL', 'OFF_RULE', '首次出场就必须建档', '服装视觉指纹']) expect(text).not.toContain(removed);
-      for (const required of ['目标第一行', '⟦P1⟧', 'LIBRARY_DATA', 'REWRITE_ONE_SLOT', '【柏宝绘输出协议】']) expect(text).toContain(required);
+      for (const required of ['目标第一行', '⟦P1⟧', 'LIBRARY_DATA', 'REWRITE_ONE_SLOT', '【图像规划输出协议】']) expect(text).toContain(required);
       expect(text.match(/目标第一行/g)).toHaveLength(1);
     } finally { settings.defaultBackend = previousBackend; }
   });

@@ -6,10 +6,11 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import Icon from '@/components/Icon.vue';
 import ModalMask from '@/components/ModalMask.vue';
 import { settings } from '@/state/settings';
-import { defaultPromptPreset } from '@/state/promptPresetDefaults';
+import { builtInPromptPreset, defaultPromptPreset } from '@/state/promptPresetDefaults';
 import {
-  activePromptPreset, deletePromptPreset, emptyPromptPresetLibrary, exportPromptPreset,
-  importPromptPreset, newPromptEntry, newPromptId, savePromptPreset,
+  activePromptPreset, BUILTIN_CLASSIC_PRESET_ID, BUILTIN_STORY_IMAGE_PRESET_ID,
+  deletePromptPreset, emptyPromptPresetLibrary, exportPromptPreset, importPromptPreset,
+  isBuiltInPromptPresetId, newPromptEntry, newPromptId, savePromptPreset,
   type PromptPreset, type PromptPresetBackend, type PromptRole,
 } from '@/state/promptPresets';
 
@@ -18,8 +19,11 @@ const BACKENDS = [{ value: 'nai', label: 'NovelAI' }, { value: 'comfyui', label:
 const ROLES = [{ value: 'system', label: 'System' }, { value: 'user', label: 'User' }, { value: 'assistant', label: 'Assistant' }];
 const library = computed(() => settings.autoTag.presetLibrary ?? emptyPromptPresetLibrary());
 const selected = computed(() => activePromptPreset(library.value, backend.value));
+const builtIn = computed(() => builtInPromptPreset(library.value.active[backend.value], backend.value, settings.autoTag.prompts));
+const displayed = computed(() => selected.value ?? builtIn.value);
 const options = computed(() => [
-  { value: '', label: '内置默认（保留原有自定义）' },
+  { value: BUILTIN_STORY_IMAGE_PRESET_ID, label: '内置 · 正文生图（推荐）' },
+  { value: BUILTIN_CLASSIC_PRESET_ID, label: '内置 · 经典版（兼容旧设置）' },
   ...library.value.presets.filter(p => p.backend === backend.value).map(p => ({ value: p.id, label: p.name })),
 ]);
 const activeId = computed({
@@ -40,7 +44,7 @@ const importError = ref('');
 const importBackend = computed({ get: () => importing.value?.backend ?? backend.value, set: value => { if (importing.value) importing.value.backend = value as PromptPresetBackend; } });
 const deleting = ref<{ id: string; name: string } | null>(null);
 const deleteOpen = computed({ get: () => !!deleting.value, set: open => { if (!open) deleting.value = null; } });
-const macros = ['上下文', '正文', '历史正文', '角色设定', '玩家设定', '世界书', '角色参考', '角色外貌库', '任务备注', 'user', 'char', 'nl'];
+const macros = ['上下文', '正文', '历史正文', '角色设定', '玩家设定', '世界书', '角色参考', '状态参考', '角色外貌库', '任务备注', '破限', '后端规范', '生成前检查', '预填充', 'user', 'char', 'nl'];
 const area = ref<InstanceType<typeof BbiTextarea> | null>(null);
 function macroToken(name: string) { return '{{' + name + '}}'; }
 
@@ -52,7 +56,7 @@ function ensureLibrary() {
   return settings.autoTag.presetLibrary ??= emptyPromptPresetLibrary();
 }
 function current(): PromptPreset {
-  return selected.value ?? defaultPromptPreset(backend.value, settings.autoTag.prompts);
+  return displayed.value ?? defaultPromptPreset(backend.value, settings.autoTag.prompts);
 }
 function uniqueName(name: string, targetBackend: PromptPresetBackend, exceptId = ''): string {
   const names = new Set(library.value.presets.filter(p => p.backend === targetBackend && p.id !== exceptId).map(p => p.name));
@@ -63,7 +67,8 @@ function uniqueName(name: string, targetBackend: PromptPresetBackend, exceptId =
 }
 function edit(copy = false) {
   const value = JSON.parse(JSON.stringify(current())) as PromptPreset;
-  if (copy) { value.id = newPromptId(); value.name += ' 副本'; }
+  if (copy || isBuiltInPromptPresetId(activeId.value)) value.id = newPromptId();
+  if (copy) value.name += ' 副本';
   value.name = uniqueName(value.name, value.backend, value.id);
   draft.value = value;
   entryId.value = value.entries[0]?.id ?? '';
@@ -146,13 +151,13 @@ function confirmDelete() {
   if (!deleting.value) return;
   deletePromptPreset(ensureLibrary(), deleting.value.id);
   deleting.value = null;
-  status.value = '预设已删除，已切回内置默认';
+  status.value = '预设已删除，已切回内置 · 正文生图';
 }
 </script>
 
 <template>
   <div class="preset-manager">
-    <p class="bbi-field-hint">管理在外部准备好的生图提示词预设。NovelAI 与 ComfyUI 分别记住当前预设，选择预设不会切换出图渠道。</p>
+    <p class="bbi-field-hint">选择内置预设，或管理自己准备的生图提示词预设。NovelAI 与 ComfyUI 分别记住当前选择，切换预设不会切换出图渠道。</p>
     <template v-if="!draft">
       <div class="preset-selectors">
         <label class="preset-field"><span>预设用途</span><BbiSelect v-model="backendModel" :options="BACKENDS" aria-label="预设用途" /></label>
@@ -166,8 +171,7 @@ function confirmDelete() {
         <button class="bbi-btn" type="button" @click="exportPreset"><Icon name="upload" />导出</button>
         <button class="bbi-btn bbi-btn-danger" type="button" :disabled="!selected" @click="selected && (deleting = { id: selected.id, name: selected.name })"><Icon name="trash" />删除</button>
       </div>
-      <p v-if="selected" class="bbi-field-hint">{{ selected.entries.length }} 个条目，{{ selected.entries.filter(e => e.enabled).length }} 个已启用。</p>
-      <p v-else class="bbi-field-hint">原有自定义提示词继续生效。编辑内置默认会另存为预设，方便修改和备份。</p>
+      <p v-if="displayed" class="bbi-field-hint">{{ displayed.entries.length }} 个条目，{{ displayed.entries.filter(e => e.enabled).length }} 个已启用。编辑内置预设会另存为自定义副本，不会改写内置内容。</p>
     </template>
     <input ref="fileInput" hidden type="file" accept=".json,application/json" aria-label="导入提示词预设文件" @change="readFile" />
 

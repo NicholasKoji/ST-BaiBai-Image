@@ -10,12 +10,15 @@ describe('prompt preset settings persistence', () => {
     vi.stubGlobal('window', { addEventListener: vi.fn(), dispatchEvent: vi.fn() });
     vi.stubGlobal('toastr', { info: vi.fn(), success: vi.fn(), error: vi.fn() });
   });
-  it('preserves legacy prompt fields and starts with no selected custom preset', async () => {
+  it('preserves legacy prompt fields and starts on the new built-in preset', async () => {
     mocks.context = { extensionSettings: { baibai_image: { autoTag: { prompts: { naiV5Spec: '旧内容' } } } }, saveSettingsDebounced: vi.fn() };
     const { hydrateSettings, settings } = await import('./settings');
     await hydrateSettings();
     expect(settings.autoTag.prompts.naiV5Spec).toBe('旧内容');
-    expect(settings.autoTag.presetLibrary).toEqual({ presets: [], active: { nai: '', comfyui: '' } });
+    expect(settings.autoTag.presetLibrary).toEqual({
+      presets: [],
+      active: { nai: 'builtin:story-image-v1', comfyui: 'builtin:story-image-v1' },
+    });
   });
   it('hydrates and persists a preset through the existing server settings store', async () => {
     const library = { presets: [{ id: 'saved', backend: 'nai', name: '已保存', entries: [{ id: 'e', name: '规则', role: 'system', content: '使用自然语言', enabled: true }] }], active: { nai: 'saved', comfyui: '' } };

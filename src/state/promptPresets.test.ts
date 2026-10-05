@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  activePromptPreset, deletePromptPreset, emptyPromptPresetLibrary, exportPromptPreset,
-  importPromptPreset, normalizePromptPresetLibrary, renderPromptPreset, savePromptPreset,
-  usedPromptMacros, validatePromptPreset, type PromptPreset,
+  activePromptPreset, BUILTIN_STORY_IMAGE_PRESET_ID, deletePromptPreset,
+  emptyPromptPresetLibrary, exportPromptPreset, importPromptPreset,
+  normalizePromptPresetLibrary, renderPromptPreset, savePromptPreset, usedPromptMacros,
+  validatePromptPreset, type PromptPreset,
 } from './promptPresets';
-import { defaultPromptPreset } from './promptPresetDefaults';
+import { defaultPromptPreset, storyImagePromptPreset } from './promptPresetDefaults';
 import { settings } from './settings';
 
 function sample(): PromptPreset {
@@ -69,15 +70,21 @@ describe('prompt preset management', () => {
     library.active = { nai: 'sample', comfyui: 'comfy' };
     expect(activePromptPreset(library, 'nai')?.id).toBe('sample');
     deletePromptPreset(library, 'sample');
-    expect(library.active).toEqual({ nai: '', comfyui: 'comfy' });
+    expect(library.active).toEqual({ nai: BUILTIN_STORY_IMAGE_PRESET_ID, comfyui: 'comfy' });
     expect(activePromptPreset(library, 'nai')).toBeUndefined();
     expect(activePromptPreset(library, 'comfyui')?.id).toBe('comfy');
   });
   it('normalizes stored data, rejecting a cross-backend active id', () => {
     const value = normalizePromptPresetLibrary({ presets: [sample(), { bad: true }], active: { nai: 'sample', comfyui: 'sample' } });
     expect(value.presets).toHaveLength(1);
-    expect(value.active).toEqual({ nai: 'sample', comfyui: '' });
+    expect(value.active).toEqual({ nai: 'sample', comfyui: BUILTIN_STORY_IMAGE_PRESET_ID });
     expect(normalizePromptPresetLibrary(null)).toEqual(emptyPromptPresetLibrary());
+  });
+  it('starts new libraries on the new built-in without storing a mutable copy', () => {
+    expect(emptyPromptPresetLibrary()).toEqual({
+      presets: [],
+      active: { nai: BUILTIN_STORY_IMAGE_PRESET_ID, comfyui: BUILTIN_STORY_IMAGE_PRESET_ID },
+    });
   });
   it('renders only enabled entries in order and keeps message roles', () => {
     expect(renderPromptPreset(sample(), { user: '玩家', 正文: '原文' })).toEqual([
@@ -98,5 +105,17 @@ describe('prompt preset management', () => {
     expect(preset.entries.find(e => e.name === '生图规范')?.content).toBe('旧自定义规范');
     expect(preset.entries.at(-1)?.content).toBe('旧预填充');
     expect(importPromptPreset(exportPromptPreset(preset), 'nai').entries).toEqual(preset.entries);
+  });
+  it.each(['nai', 'comfyui'] as const)('provides the structured built-in for %s', backend => {
+    const preset = storyImagePromptPreset(backend);
+    expect(preset.id).toBe(BUILTIN_STORY_IMAGE_PRESET_ID);
+    expect(preset.backend).toBe(backend);
+    expect(preset.entries.map(entry => entry.name)).toEqual([
+      '破限', '任务职责', '人物与状态参考', '外貌和衣着一致性', '画面选择',
+      '后端书写规范', '输出检查', '资料与目标正文', '预填充',
+    ]);
+    expect(preset.entries[0].content).toBe('{{破限}}');
+    expect(preset.entries.find(entry => entry.name === '人物与状态参考')?.content).toContain('禁止把片段末尾');
+    expect(preset.entries.find(entry => entry.name === '资料与目标正文')?.content).toContain('{{状态参考}}');
   });
 });

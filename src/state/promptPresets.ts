@@ -24,6 +24,12 @@ export interface PromptPresetLibrary {
 
 export const PRESET_FORMAT = 'bbi-prompt-preset';
 export const PRESET_VERSION = 1;
+export const BUILTIN_CLASSIC_PRESET_ID = '';
+export const BUILTIN_STORY_IMAGE_PRESET_ID = 'builtin:story-image-v1';
+
+export function isBuiltInPromptPresetId(id: string): boolean {
+  return id === BUILTIN_CLASSIC_PRESET_ID || id === BUILTIN_STORY_IMAGE_PRESET_ID;
+}
 
 let sequence = 0;
 export function newPromptId(): string {
@@ -31,7 +37,13 @@ export function newPromptId(): string {
 }
 
 export function emptyPromptPresetLibrary(): PromptPresetLibrary {
-  return { presets: [], active: { nai: '', comfyui: '' } };
+  return {
+    presets: [],
+    active: {
+      nai: BUILTIN_STORY_IMAGE_PRESET_ID,
+      comfyui: BUILTIN_STORY_IMAGE_PRESET_ID,
+    },
+  };
 }
 
 export function newPromptEntry(name = '新条目'): PromptPresetEntry {
@@ -98,7 +110,10 @@ export function normalizePromptPresetLibrary(value: unknown): PromptPresetLibrar
   }
   for (const backend of ['nai', 'comfyui'] as const) {
     const id = data.active?.[backend];
-    if (result.presets.some(p => p.id === id && p.backend === backend)) result.active[backend] = id!;
+    if (typeof id !== 'string') continue;
+    if (isBuiltInPromptPresetId(id) || result.presets.some(p => p.id === id && p.backend === backend)) {
+      result.active[backend] = id;
+    }
   }
   return result;
 }
@@ -117,7 +132,9 @@ export function savePromptPreset(library: PromptPresetLibrary, draft: PromptPres
 
 export function deletePromptPreset(library: PromptPresetLibrary, id: string): void {
   library.presets = library.presets.filter(p => p.id !== id);
-  for (const backend of ['nai', 'comfyui'] as const) if (library.active[backend] === id) library.active[backend] = '';
+  for (const backend of ['nai', 'comfyui'] as const) {
+    if (library.active[backend] === id) library.active[backend] = BUILTIN_STORY_IMAGE_PRESET_ID;
+  }
 }
 
 /** Single-pass substitutions: story text and imported content are never evaluated as code. */

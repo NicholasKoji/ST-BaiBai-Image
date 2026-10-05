@@ -250,7 +250,7 @@ export function fetchUserPersona(context: STContext): string {
 
 /** 把世界书设定包成独立 system 消息的内容(空设定时调用方应跳过) */
 export function buildWorldInfoSystem(worldInfo: string): string {
-  return `【世界设定(世界书激活的相关设定,只读参考)】
+  return `【世界背景(只读参考)】
 务必与以下设定保持一致,不得编造与其矛盾的内容;但设定本身不是本轮发生的事,不要写进输出。
 
 ${worldInfo.trim()}`;
@@ -258,7 +258,7 @@ ${worldInfo.trim()}`;
 
 /** 把角色卡描述包成独立 system 消息(有些卡人设写在角色描述而非世界书里,tag 生成也需据此理解角色)。 */
 export function buildCharCardSystem(charCard: string): string {
-  return `【角色设定(角色卡设定,只读参考)】
+  return `【人物设定(只读参考)】
 以下是当前角色的人物设定,用于帮助你理解角色的外貌与言行;它不是本轮发生的事,不要写进输出。
 
 ${charCard.trim()}`;
@@ -266,7 +266,7 @@ ${charCard.trim()}`;
 
 /** 把用户人设(persona)包成独立 system 消息(用于理解「主角是谁」)。 */
 export function buildPersonaSystem(persona: string): string {
-  return `【主角设定(用户操控的主角本人设定,只读参考)】
+  return `【主角设定(只读参考)】
 以下是主角(即对话里的"用户/User"一方)本人的人物设定,用于帮助你理解主角的身份与外貌;它不是本轮发生的事,不要写进输出。
 
 ${persona.trim()}`;
