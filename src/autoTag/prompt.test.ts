@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildAutoTagMessages } from '@/autoTag/prompt';
+import { emptyPromptPresetLibrary, savePromptPreset } from '@/state/promptPresets';
 import {
   activeComfyPreset,
   settings,
@@ -980,5 +981,60 @@ describe('auto tag prompt', () => {
       preset.mode = oldMode;
       preset.simple.template = oldTemplate;
     }
+  });
+});
+
+
+describe('selected prompt presets in generation', () => {
+  function customOptions(): AutoTagSettings {
+    const presetLibrary = emptyPromptPresetLibrary();
+    savePromptPreset(presetLibrary, { id: 'custom', backend: 'nai', name: '自定义', entries: [
+      { id: 'rules', name: '规则', role: 'system', enabled: true, content: 'CUSTOM_RULE 使用自然语言' },
+      { id: 'off', name: '关闭', role: 'system', enabled: false, content: 'OFF_RULE' },
+      { id: 'context', name: '输入', role: 'user', enabled: true, content: '{{上下文}}' },
+      { id: 'prefill', name: '预填充', role: 'assistant', enabled: true, content: '<thinking>CUSTOM_PREFILL' },
+    ] });
+    presetLibrary.active.nai = 'custom';
+    return { enabled: true, contextMessages: 2, minImages: 0, maxImages: 2, retryCount: 1, autoGenerate: false,
+      prompts: prompts({ jailbreak: 'OLD_SYSTEM', naiV5Spec: 'OLD_SPEC', naiV5Thinking: 'OLD_THINK', prefill: 'OLD_PREFILL' }), presetLibrary };
+  }
+  it('uses custom entries without adding old slots, and retains context, protocol and trailing prefill', async () => {
+    const previousBackend = settings.defaultBackend;
+    try {
+      settings.defaultBackend = 'nai';
+      const messages = await buildAutoTagMessages(context(), 1, customOptions(), null, undefined, 'LIBRARY_DATA', 'REWRITE_ONE_SLOT');
+      const text = messages.map(m => m.content).join('\n');
+      expect(messages[0].content).toBe('CUSTOM_RULE 使用自然语言');
+      expect(messages.at(-1)).toEqual({ role: 'assistant', content: '<thinking>CUSTOM_PREFILL' });
+      for (const removed of ['OLD_SYSTEM', 'OLD_SPEC', 'OLD_THINK', 'OLD_PREFILL', 'OFF_RULE', '首次出场就必须建档', '服装视觉指纹']) expect(text).not.toContain(removed);
+      for (const required of ['目标第一行', '⟦P1⟧', 'LIBRARY_DATA', 'REWRITE_ONE_SLOT', '【柏宝绘输出协议】']) expect(text).toContain(required);
+      expect(text.match(/目标第一行/g)).toHaveLength(1);
+    } finally { settings.defaultBackend = previousBackend; }
+  });
+  it('adds missing context when no context macro is present', async () => {
+    const previousBackend = settings.defaultBackend;
+    try {
+      settings.defaultBackend = 'nai';
+      const options = customOptions(); options.presetLibrary!.presets[0].entries.splice(2, 1);
+      const messages = await buildAutoTagMessages(context(), 1, options, null);
+      expect(messages.some(m => m.role === 'user' && m.content.includes('目标第一行'))).toBe(true);
+      expect(messages.at(-1)?.content).toBe('<thinking>CUSTOM_PREFILL');
+    } finally { settings.defaultBackend = previousBackend; }
+  });
+  it('uses the matching ComfyUI selection and never applies a NAI preset to ComfyUI', async () => {
+    const previousBackend = settings.defaultBackend;
+    try {
+      settings.defaultBackend = 'comfyui';
+      const options = customOptions();
+      let messages = await buildAutoTagMessages(context(), 1, options, null);
+      expect(messages.some(m => m.content.includes('CUSTOM_RULE'))).toBe(false);
+      savePromptPreset(options.presetLibrary!, { id: 'comfy', backend: 'comfyui', name: 'CUI', entries: [
+        { id: 'x', name: '规则', role: 'user', enabled: true, content: 'COMFY_CUSTOM {{正文}}' },
+      ] });
+      options.presetLibrary!.active.comfyui = 'comfy';
+      messages = await buildAutoTagMessages(context(), 1, options, null);
+      expect(messages[0].content).toContain('COMFY_CUSTOM --- 目标正文');
+      expect(messages.map(m => m.content).join('\n').match(/目标第一行/g)).toHaveLength(1);
+    } finally { settings.defaultBackend = previousBackend; }
   });
 });

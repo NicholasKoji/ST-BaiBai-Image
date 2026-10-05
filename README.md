@@ -54,7 +54,7 @@
 在 SillyTavern 的「扩展 → 安装扩展」里填入本仓库地址即可：
 
 ```
-https://github.com/baibai-git/ST-BaiBai-Image
+https://github.com/NicholasKoji/ST-BaiBai-Image
 ```
 
 安装后进入「设置」页：先到「渠道」页配置出图渠道（本地 ComfyUI 或 NovelAI 账号），再确认「自动生成 tag」开关已打开，就可以开始自动配图了。设置会随 SillyTavern 保存在服务器，跨设备自动同步。
@@ -84,3 +84,10 @@ https://github.com/baibai-git/ST-BaiBai-Image
 ---
 
 作者：柏柏 · 欢迎反馈与建议。
+
+
+## Fork：自定义提示词预设
+
+本 Fork 将设置页的「自定义提示词」升级为预设管理：导入时选择 NovelAI / ComfyUI，独立切换预设，支持导出、删除、复制以及逐条编辑、启停和排序。预设在外部准备，插件不负责来源识别或格式转换。
+
+文件格式、上下文宏和使用说明见 [PROMPT_PRESETS.md](./PROMPT_PRESETS.md)。

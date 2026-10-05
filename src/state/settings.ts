@@ -14,6 +14,7 @@ import {
 } from '@/backends/vibeStore';
 import { getContext } from '@/st/context';
 import { reactive, watch } from 'vue';
+import { emptyPromptPresetLibrary, normalizePromptPresetLibrary, type PromptPresetLibrary } from './promptPresets';
 
 /**
  * 柏宝绘设置(全局,跨聊天)。存进 ST 的 extension_settings(→ 服务器 settings.json),
@@ -407,6 +408,8 @@ export interface AutoTagSettings {
   autoGenerate: boolean;
   /** 可编辑提示词集(破限/后端规范/思维链/预填充);空串 = 回落内置默认。 */
   prompts: AutoTagPrompts;
+  /** 用户自行准备的提示词预设；旧 prompts 仅作为内置回退保留。 */
+  presetLibrary?: PromptPresetLibrary;
 }
 
 /**
@@ -1133,6 +1136,7 @@ function defaults(): ImageSettings {
       maxImages: 2,
       retryCount: 1,
       autoGenerate: true,
+      presetLibrary: emptyPromptPresetLibrary(),
       prompts: {
         jailbreak: '',
         naiSpec: '',
@@ -1732,6 +1736,7 @@ function normalize(raw: unknown): ImageSettings {
       };
     })(),
   };
+  merged.autoTag.presetLibrary = normalizePromptPresetLibrary(rt.presetLibrary);
   merged.excludes = normalizeExcludes(r.excludes);
   // 存储行为:嵌套对象逐字段兜底(老数据无 storage 键 → 默认关)
   const rs = (r.storage ?? {}) as Partial<StoragePrefs>;
