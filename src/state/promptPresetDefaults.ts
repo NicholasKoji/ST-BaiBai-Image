@@ -93,6 +93,8 @@ const STORY_IMAGE_ENTRIES = [
   ['预填充', 'assistant', '{{预填充}}'],
 ] as const;
 
+const NAI_NEW_PROFILE_NL_RULE = `8. NovelAI 建档要求：changes 中每条 field:"new" 都必须同时提供非空 nl。这里的 nl 是该角色固定外貌的英文自然语言描述，供后续 NovelAI Character Prompt 稳定复用；它不是本张图片的动作描述。只写长期固定的发型发色、瞳色、肤色、体型和标志特征，不写当前服装、姿势、动作、表情或场景。示例：{"name":"小雪","field":"new","fields":{"sex":"1girl","hair":"long black hair","eyes":"blue eyes"},"nl":"A girl with long black hair and blue eyes.","position":"P2","reason":"首次出场建档"}。`;
+
 /** New built-in prompt, distilled from the reference presets without importing their runtime syntax. */
 export function storyImagePromptPreset(backend: PromptPresetBackend): PromptPreset {
   return {
@@ -103,7 +105,9 @@ export function storyImagePromptPreset(backend: PromptPresetBackend): PromptPres
       id: `${BUILTIN_STORY_IMAGE_PRESET_ID}:${index + 1}`,
       name,
       role,
-      content,
+      content: backend === 'nai' && name === '人物与状态参考'
+        ? `${content}\n${NAI_NEW_PROFILE_NL_RULE}`
+        : content,
       enabled: true,
     })),
   };

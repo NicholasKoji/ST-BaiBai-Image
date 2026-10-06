@@ -117,5 +117,12 @@ describe('prompt preset management', () => {
     expect(preset.entries[0].content).toBe('{{破限}}');
     expect(preset.entries.find(entry => entry.name === '人物与状态参考')?.content).toContain('禁止把片段末尾');
     expect(preset.entries.find(entry => entry.name === '资料与目标正文')?.content).toContain('{{状态参考}}');
+    const profileReference = preset.entries.find(entry => entry.name === '人物与状态参考')?.content ?? '';
+    if (backend === 'nai') {
+      expect(profileReference).toContain('每条 field:"new" 都必须同时提供非空 nl');
+      expect(profileReference).toContain('只写长期固定的发型发色');
+    } else {
+      expect(profileReference).not.toContain('NovelAI 建档要求');
+    }
   });
 });

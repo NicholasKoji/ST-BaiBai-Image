@@ -1017,6 +1017,8 @@ describe('selected prompt presets in generation', () => {
       expect(text.match(/END_STATE_FACT/g)).toHaveLength(1);
       expect(text.match(/LIBRARY_FACT/g)).toHaveLength(1);
       expect(text).toContain('【图像规划输出协议】');
+      expect(text).toContain('每条 field:"new" 都必须同时提供非空 nl');
+      expect(text).toContain('field:"new" 建档都必须包含非空 nl');
       expect(messages.at(-1)).toEqual({ role: 'assistant', content: '<thinking>REUSED_PREFILL' });
     } finally { settings.defaultBackend = old; }
   });

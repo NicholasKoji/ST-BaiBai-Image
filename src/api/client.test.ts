@@ -165,6 +165,14 @@ describe('extractContent:标准响应', () => {
     const data = { choices: [{ message: { role: 'assistant', content: null, refusal: null } }] };
     expect(extractContent(data)).toBe('');
   });
+
+  it('兼容 Gemini 原生 candidates parts 与整包数组', () => {
+    const data = [
+      { candidates: [{ content: { parts: [{ text: 'Gem' }] } }] },
+      { candidates: [{ content: { parts: [{ text: 'ini' }] } }] },
+    ];
+    expect(extractContent(data)).toBe('Gemini');
+  });
 });
 
 describe('extractContent:推理模型把答案塞进 reasoning', () => {
@@ -236,6 +244,26 @@ describe('readSseContent:流式', () => {
       '',
     ].join('\n');
     await expect(readSseContent(sseResponse(sse))).resolves.toBe('答案!');
+  });
+
+  it('消费没有结尾换行的最后一条假流式 SSE', async () => {
+    const sse = 'data: {"choices":[{"delta":{"content":"完整答案"}}]}';
+    await expect(readSseContent(sseResponse(sse))).resolves.toBe('完整答案');
+  });
+
+  it('stream=true 但端点返回整包 JSON 时仍能提取', async () => {
+    const body = JSON.stringify({ choices: [{ message: { content: '整包答案' } }] });
+    await expect(readSseContent(sseResponse(body))).resolves.toBe('整包答案');
+  });
+
+  it('兼容 Gemini 原生 SSE 增量', async () => {
+    const sse = [
+      'data: {"candidates":[{"content":{"parts":[{"text":"Gem"}]}}]}',
+      'data: {"candidates":[{"content":{"parts":[{"text":"ini"}]}}]}',
+      'data: [DONE]',
+      '',
+    ].join('\n');
+    await expect(readSseContent(sseResponse(sse))).resolves.toBe('Gemini');
   });
 });
 

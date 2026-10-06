@@ -346,37 +346,59 @@ export async function readSseContent(resp: Response): Promise<string> {
   }
   const decoder = new TextDecoder();
   let buf = '';
+  let raw = '';
   let out = '';
   let reasoningOut = '';
+
+  const consumeLine = (line: string): void => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+
+    // 标准 SSE 用 data:；部分“假流式”网关实际返回逐行 JSON，二者都接住。
+    const payload = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
+    if (!payload || payload === '[DONE]' || (!payload.startsWith('{') && !payload.startsWith('['))) {
+      return;
+    }
+
+    try {
+      const json = JSON.parse(payload);
+      if (json?.error) throw new ApiError(json.error.message || '副 API 返回错误');
+      const extracted = responseText(json);
+      if (extracted.content) out += extracted.content;
+      if (extracted.reasoning) reasoningOut += extracted.reasoning;
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      // 单行解析失败忽略：可能是被分行的整体 JSON，流结束后会再按完整正文解析。
+    }
+  };
+
   for (; ;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += decoder.decode(value, { stream: true });
+    const chunk = decoder.decode(value, { stream: true });
+    raw += chunk;
+    buf += chunk;
     // 按行解析,保留最后一段不完整的行到下次
     const lines = buf.split('\n');
     buf = lines.pop() ?? '';
-    for (const line of lines) {
-      const t = line.trim();
-      if (!t || !t.startsWith('data:')) continue;
-      const payload = t.slice(5).trim();
-      if (payload === '[DONE]') continue;
-      try {
-        const json = JSON.parse(payload);
-        if (json?.error) throw new ApiError(json.error.message || '副 API 返回错误');
-        const choice = json?.choices?.[0];
-        const src = choice?.delta ?? choice?.message;
-        const piece = textOf(src?.content) || textOf(choice?.text);
-        if (piece) out += piece;
-        const reasoningPiece =
-          textOf(src?.reasoning) || textOf(src?.reasoning_content) || textOf(src?.thinking);
-        if (reasoningPiece) reasoningOut += reasoningPiece;
-      } catch (e) {
-        if (e instanceof ApiError) throw e;
-        // 单行解析失败忽略(可能是注释行/心跳)
-      }
-    }
+    for (const line of lines) consumeLine(line);
   }
-  return out.trim() || reasoningOut.trim();
+
+  // TextDecoder 可能还压着一个不完整码点；同时必须消费没有结尾换行的最后一条 SSE。
+  const tail = decoder.decode();
+  raw += tail;
+  buf += tail;
+  consumeLine(buf);
+
+  const streamed = out.trim() || reasoningOut.trim();
+  if (streamed) return streamed;
+
+  // 有些“假流式”端点无视 stream=true，直接回一整个 JSON；读流后按整体再兜底一次。
+  try {
+    return extractContent(JSON.parse(raw));
+  } catch {
+    return '';
+  }
 }
 
 /** 把可能是 string / content-parts 数组 / 其他类型的值转成文本;非字符串成分一律丢弃。 */
@@ -396,6 +418,46 @@ function textOf(value: unknown): string {
   return '';
 }
 
+interface ResponseText {
+  content: string;
+  reasoning: string;
+}
+
+/**
+ * 从单个响应/增量对象中拆出正文与思维链。
+ * 除 OpenAI 兼容结构外，也接住 Gemini 原生 candidates[].content.parts[].text；
+ * 部分中转会再包一层 data，递归一次即可。
+ */
+function responseText(data: any): ResponseText {
+  if (Array.isArray(data)) {
+    return data.reduce<ResponseText>(
+      (all, item) => {
+        const next = responseText(item);
+        all.content += next.content;
+        all.reasoning += next.reasoning;
+        return all;
+      },
+      { content: '', reasoning: '' },
+    );
+  }
+
+  const choice = data?.choices?.[0];
+  const src = choice?.delta ?? choice?.message;
+  const geminiParts = data?.candidates?.[0]?.content?.parts;
+  const content =
+    textOf(src?.content) ||
+    textOf(choice?.text) ||
+    textOf(data?.content) ||
+    textOf(data?.output_text) ||
+    textOf(geminiParts);
+  const reasoning =
+    textOf(src?.reasoning) || textOf(src?.reasoning_content) || textOf(src?.thinking);
+  if (content || reasoning) return { content, reasoning };
+
+  if (data?.data && data.data !== data) return responseText(data.data);
+  return { content: '', reasoning: '' };
+}
+
 /**
  * 从响应体提取答案文本。
  * 标准链:message.content / choices[0].text / data.content;
@@ -404,13 +466,8 @@ function textOf(value: unknown): string {
  * 混入的思维链由 parseImagePlan 的 JSON 块扫描自然剔除。
  */
 export function extractContent(data: any): string {
-  const msg = data?.choices?.[0]?.message;
-  const content =
-    textOf(msg?.content) || textOf(data?.choices?.[0]?.text) || textOf(data?.content);
-  if (content.trim()) return content.trim();
-  return (
-    textOf(msg?.reasoning) || textOf(msg?.reasoning_content) || textOf(msg?.thinking)
-  ).trim();
+  const extracted = responseText(data);
+  return extracted.content.trim() || extracted.reasoning.trim();
 }
 
 /* ============ 跟随主 API(主界面当前在用的 API 设置) ============ */
