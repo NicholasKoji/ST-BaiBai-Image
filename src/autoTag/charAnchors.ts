@@ -21,8 +21,10 @@ import { getTagGenChannel } from '@/state/settings';
  *   模型据此画出多个重叠躯干(正向权重乘三,负面词压不住)。
  * - 规范里「40 个 tag 以内」的预算无法执行:AI 数 @小雪 是 1 个,实际展开成 6 个。
  * - 库脏数据被无条件放大:动作/场景词误入 outfit 字段时,每次展开都带上它。
- * 库文本本就在同一上下文里、字段值明明白白列着,照抄可见文本比凭记忆复述可靠,
- * 原设计高估了漂移风险。故改回「库只作参考,AI 自己写全」。
+ * 库文本本就在同一上下文里、字段值明明白白列着，AI 先按库写全角色块；
+ * 输出后插件还会根据 characters[].name 把同名档案字段确定性合并到该角色
+ * 的 tag 前端。这样即使 AI 偶发漏抄 body/extra 等字段，真正发往生图后端的
+ * 固定外貌仍与角色库一致；动作、衣着和表情仍由 AI 在后面补充。
  *
  * applyCharRefs 系函数保留:模型偶发写出 @名字 时仍会被替换掉,不至于把字面量
  * 送进生图。即从主路径降级为兜底。
@@ -200,6 +202,62 @@ function joinEntryTag(entry: CharTagEntry): string {
     .join(', ');
 }
 
+/** Character Prompt 里不放人数，库中的 1girl/1boy 在这里稳定转为 girl/boy。 */
+function asCharacterPromptTag(text: string): string {
+  return text
+    .split(',')
+    .map(part => {
+      const value = part.trim();
+      if (/^\d+\s*girls?$/i.test(value)) return 'girl';
+      if (/^\d+\s*boys?$/i.test(value)) return 'boy';
+      return value;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+function positionedEntries(
+  entries: CharTagEntry[],
+  ops: PositionedCharOp[],
+  sourceLine: number,
+  locked?: ReadonlySet<string>,
+): CharTagEntry[] {
+  const activeOps = ops
+    .filter(item => item.op.kind === 'new' || item.sourceLine <= sourceLine)
+    .map(item => item.op);
+  return applyCharTagOps(entries, activeOps, -1, locked);
+}
+
+/**
+ * 把同名角色在当前剧情位置生效的固定档案合并到 Character Prompt。
+ *
+ * 档案字段始终在前，AI 生成的当前衣着/动作/表情在后；完全相同的逗号项
+ * 按忽略大小写去重。无同名档案的一次性角色保持原样。
+ */
+export function mergePositionedCharacterProfileTag(
+  name: string,
+  tag: string,
+  entries: CharTagEntry[],
+  ops: PositionedCharOp[],
+  sourceLine: number,
+  locked?: ReadonlySet<string>,
+): string {
+  const entry = positionedEntries(entries, ops, sourceLine, locked).find(item => item.name === name);
+  if (!entry) return tidySeparators(tag);
+
+  const fixed = asCharacterPromptTag(joinEntryTag(entry));
+  const parts = [...fixed.split(','), ...tag.split(',')].map(part => part.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  return parts
+    .filter(part => {
+      const key = part.toLocaleLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(', ');
+}
+
 /** 压缩替换后残留的分隔符垃圾:连续逗号、行首行尾逗号。 */
 function tidySeparators(text: string): string {
   let out = text;
@@ -259,8 +317,5 @@ export function applyPositionedCharRefs(
   mode: 'tag' | 'nl' = 'tag',
   locked?: ReadonlySet<string>,
 ): { text: string; unknown: string[] } {
-  const activeOps = ops
-    .filter(item => item.op.kind === 'new' || item.sourceLine <= sourceLine)
-    .map(item => item.op);
-  return applyCharRefs(text, applyCharTagOps(entries, activeOps, -1, locked), mode);
+  return applyCharRefs(text, positionedEntries(entries, ops, sourceLine, locked), mode);
 }

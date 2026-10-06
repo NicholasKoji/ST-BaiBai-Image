@@ -806,6 +806,40 @@ describe('auto tag prompt', () => {
     }
   });
 
+  it('uses tag-only Base and Character Prompts for NAI 4.5', async () => {
+    const options: AutoTagSettings = {
+      enabled: true,
+      contextMessages: 2,
+      minImages: 0,
+      maxImages: 2,
+      retryCount: 1,
+      autoGenerate: true,
+      prompts: prompts(),
+    };
+    const oldBackend = settings.defaultBackend;
+    const oldModel = settings.nai.model;
+    try {
+      settings.defaultBackend = 'nai';
+      settings.nai.model = 'nai-diffusion-4-5-full';
+      const messages = await buildAutoTagMessages(context(), 1, options, null);
+      const spec = messages.find(message => message.content.startsWith('[NovelAI 4.5'))?.content ?? '';
+      const contract = messages.find(message => message.content.startsWith('你是严谨的剧情画面规划'))?.content ?? '';
+      expect(spec).toContain('Tag-only Prompt Specification');
+      expect(spec).toContain('Output danbooru tags only');
+      expect(spec).toContain('Every item is {"name":"...","tag":"..."}');
+      expect(spec).not.toContain('Both Base and Character Prompts must use Tag + English natural language');
+      expect(contract).toContain('NAI 4.5 uses tag-only Base and native Character Prompts');
+      expect(contract).toContain('"characters":[{"name":"小雪","tag":');
+      expect(contract).not.toContain('"nl":"');
+      expect(contract).not.toContain('NAI V5 profile requirement');
+      expect(messages.some(message => message.content.includes('NAI 4.5 一张图 = 一个 Base tag'))).toBe(true);
+      expect(contract).toContain('do not output nl');
+    } finally {
+      settings.defaultBackend = oldBackend;
+      settings.nai.model = oldModel;
+    }
+  });
+
   // 表情/视线此前在三个后端规范里都没有位置,思维链槽位填了也会在转 tag 时丢掉。
   it('reserves an expression/gaze slot in the tag ordering of both tag-based backends', async () => {
     const options: AutoTagSettings = {
@@ -990,6 +1024,43 @@ describe('auto tag prompt', () => {
 
 
 describe('selected prompt presets in generation', () => {
+  it('keeps the new built-in tag-only when NAI 4.5 is selected', async () => {
+    const oldBackend = settings.defaultBackend;
+    const oldModel = settings.nai.model;
+    try {
+      settings.defaultBackend = 'nai';
+      settings.nai.model = 'nai-diffusion-4-5-full';
+      const presetLibrary = emptyPromptPresetLibrary();
+      presetLibrary.active.nai = BUILTIN_STORY_IMAGE_PRESET_ID;
+      const messages = await buildAutoTagMessages(
+        context(),
+        1,
+        {
+          enabled: true,
+          contextMessages: 2,
+          minImages: 0,
+          maxImages: 2,
+          retryCount: 1,
+          autoGenerate: false,
+          prompts: prompts(),
+          presetLibrary,
+        },
+        null,
+      );
+      const text = messages.map(message => message.content).join('\n');
+      const transport = messages.find(message => message.content.startsWith('【图像规划输出协议】'))?.content ?? '';
+      expect(text).toContain('[NovelAI 4.5 Tag-only Prompt Specification]');
+      expect(text).not.toContain('[NovelAI V5 Prompt Specification]');
+      expect(transport).toContain('tag 必须是非空 danbooru tags，不得输出 nl');
+      expect(transport).toContain('每个角色只需 name 与 tag，不得输出 nl');
+      expect(transport).not.toContain('field:"new" 建档都必须包含非空 nl');
+      expect(transport.match(/"nl":/g)).toBeNull();
+    } finally {
+      settings.defaultBackend = oldBackend;
+      settings.nai.model = oldModel;
+    }
+  });
+
   it('renders the new built-in as independent entries and reuses the configured jailbreak', async () => {
     const old = settings.defaultBackend;
     try {
@@ -1017,7 +1088,6 @@ describe('selected prompt presets in generation', () => {
       expect(text.match(/END_STATE_FACT/g)).toHaveLength(1);
       expect(text.match(/LIBRARY_FACT/g)).toHaveLength(1);
       expect(text).toContain('【图像规划输出协议】');
-      expect(text).toContain('每条 field:"new" 都必须同时提供非空 nl');
       expect(text).toContain('field:"new" 建档都必须包含非空 nl');
       expect(messages.at(-1)).toEqual({ role: 'assistant', content: '<thinking>REUSED_PREFILL' });
     } finally { settings.defaultBackend = old; }

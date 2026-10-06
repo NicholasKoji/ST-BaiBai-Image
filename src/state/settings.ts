@@ -115,9 +115,10 @@ export type NaiModel =
   | 'nai-diffusion-3';
 
 /**
- * 可选模型:只留 4.5 与 V5。两代共用同一套「Base + 原生 Character Prompts + 英文自然
- * 语言」协议,收窄后 naiSupportsCharacterPrompts 对全部可选模型恒真 —— 单串 tag 那套
- * DEFAULT_NAI_SPEC / DEFAULT_NAI_THINKING 因此不再可达,设置页也相应撤掉了入口。
+ * 可选模型:只留 4.5 与 V5。两代都使用 Base + 原生 Character Prompts；
+ * 插件默认将输出内容分开：4.5 只发 danbooru tags，V5 发 tags + 英文自然语言。
+ * 原版 NAI4 的单串 DEFAULT_NAI_SPEC / DEFAULT_NAI_THINKING 不再可达，
+ * 设置页也相应撤掉了入口。
  *
  * ⚠ 存量选着已下线模型的配置会被 normalizeNai 回落到 naiDefaults().model:画风、Anlas
  * 消耗与 vibe 编码 key 都会随之改变。这是有意接受的代价(4.5 以下已基本无人使用),
@@ -538,7 +539,7 @@ Two girls as the main focus, medium shot, in a park at sunset. The black-haired 
  * ⚠ 设置页已撤掉本项的编辑入口:模型列表只剩 4.5/V5(见 NAI_MODELS),
  * `naiCharPromptsOn` 恒真,本常量与 settings 里的 `naiSpec` 键都不再可达。
  * 保留是为了不动存量 settings 键、也不动 4.5 以下模型标识的协议分支;
- * 改 NAI 规范请改 DEFAULT_NAI_V5_SPEC(设置页里显示为「NAI 规范」的就是那一份)。
+ * 可选的 4.5/V5 分别使用 DEFAULT_NAI_45_SPEC / DEFAULT_NAI_V5_SPEC。
  */
 export const DEFAULT_NAI_SPEC = `【NovelAI 提示词规范】
 你输出的画面提示词会被直接发送给 NovelAI 生图接口。
@@ -613,13 +614,14 @@ NAI 对 danbooru 体系理解最好：人物多的画面务必写清数量 tag�
 /**
  * 思维链内置默认(ComfyUI):输出 JSON 前的思考检查清单,作为 system 压在任务协议之后。
  *
- * ⚠ 思维链按后端各存一份(comfy / nai / naiV5),原因是它和后端规范必须配对:
+ * ⚠ 思维链必须与后端规范配对：ComfyUI、旧 NAI 单串、NAI 4.5 角色块与
+ * NAI V5 角色块需要不同的输出字段，不能因为都有 Character Prompts 就共用一份。
  * 槽位块要求填的每个字段,都得在同后端的规范里有判据和词表。共用一份的旧写法让
  * NAI V5 拿到了「景别/环境光/邻接绑定」这类它的规范从未教过、甚至明令禁止的要求。
  * comfy 与 nai 结构相同(协议形态都是单条 tag 串),内容已按各自口径分头调:
  * 身份 tag 转义与 negative 条件自查只属 comfy,显式 NSFW 解剖落点只属 nai;
- * V5 那份的第二层是另一套结构(Base 块 + 每角色块),见 DEFAULT_NAI_V5_THINKING。
- * ⚠ 眼下实际在用的只有 comfy 与 naiV5 两份:nai 那份随 4.5 以下模型一起下线(无 UI 入口)。
+ * NAI 4.5/V5 的第二层都是 Base + 每角色块，但 4.5 不包含 nl。
+ * 旧 nai 单串那份随 4.5 以下模型一起下线（无 UI 入口）。
  */
 export const DEFAULT_COMFY_THINKING = `【输出前思考清单】
 先在 <thinking> 与 </thinking> 之间按下面顺序过一遍，思考结束后再输出最终 JSON。除这一个 <thinking> 块与最终 JSON 外，不得输出任何内容，也不得开启第二个 <thinking> 块。
@@ -698,7 +700,7 @@ E. 选段
  * 0.1.16 的旧清单本来有、三层重写时弄丢,此处补回)。
  *
  * ⚠ 与 DEFAULT_NAI_SPEC 同批下线:设置页已无编辑入口,模型列表收窄到 4.5/V5 后不可达。
- * 改 NAI 思维链请改 DEFAULT_NAI_V5_THINKING。
+ * 可选的 4.5/V5 分别使用 DEFAULT_NAI_45_THINKING / DEFAULT_NAI_V5_THINKING。
  */
 export const DEFAULT_NAI_THINKING = `【输出前思考清单】
 先在 <thinking> 与 </thinking> 之间按下面顺序过一遍，思考结束后再输出最终 JSON。除这一个 <thinking> 块与最终 JSON 外，不得输出任何内容，也不得开启第二个 <thinking> 块。
@@ -770,12 +772,12 @@ E. 选段
    - 张数在设定范围内；仅当下限为 0 且确实无可画时 images 才为空，且无论如何都保留应有的建档与 changes。`;
 
 /**
- * NAI 思维链内置默认(4.5/V5,设置页里显示为「NAI 思维链」)。第一层与第三层沿用同一套
+ * NAI V5 思维链内置默认。第一层与第三层沿用同一套
  * 判断顺序,第二层换成这套协议自己的形态:一张图 = 一个 Base 块 + 每个入画个体各一块,
- * 对应 characters[] 数组。模型列表收窄后这是 NAI 后端唯一在用的一份。
+ * 对应 characters[] 数组，并包含 V5 才发送的 nl 检查。
  *
  * ⚠ 这份里不得出现 "X on Y girl" 式邻接绑定——DEFAULT_NAI_V5_SPEC 第 8 条明令禁止,
- * 4.5/V5 靠 Character Prompt 天然隔离每个人,写邻接绑定反而是把两套机制混用。
+ * V5 靠 Character Prompt 隔离每个人，写邻接绑定反而是把两套机制混用。
  */
 export const DEFAULT_NAI_V5_THINKING = `【输出前思考清单】
 先在 <thinking> 与 </thinking> 之间按下面顺序过一遍，思考结束后再输出最终 JSON。除这一个 <thinking> 块与最终 JSON 外，不得输出任何内容，也不得开启第二个 <thinking> 块。
@@ -864,17 +866,87 @@ V5 的一张图 = 一个 Base 块 + 每个本图可见的个体角色各一块�
    - 画面保持 E 段选定的主体和核心互动，没有为了减人数破坏核心互动，也没有把无关在场者补进画面；缺档未成为放弃画面或裁掉必要参与者的理由。取景框内每个可见的个体都有自己的角色块，入画的人群留在 Base；镜头外的人不写入 tag/nl/characters，Base 人数只计取景框内可见的人。
    - 张数在设定范围内；仅当下限为 0 且确实无可画时 images 才为空，且无论如何都保留应有的建档与 changes。`;
 
+/** NAI 4.5 的原生 Character Prompt 思考清单：结构与 V5 相同，传输内容只有 tags。 */
+export const DEFAULT_NAI_45_THINKING = `【输出前思考清单】
+先在 <thinking> 与 </thinking> 之间完成检查，再输出最终 JSON。不得开启第二个 <thinking> 块，不预写最终 tag 串。
+
+第一层｜全局判断（整楼各做一次）
+A. 事实与状态：只给目标正文选图；区分永久外貌、连续场景里的临时服装/状态、以及单帧表情姿势。正文没有明确变化时不得重置。
+B. 角色与建档：列出已建档、本次建档、一次性指称三类。清点名单不是入画名单；一次性角色只在入画时才在他自己的角色块里补外貌。名字必须与资料/档案逐字相同。hair 同时带发色和长度/发型，eyes 带瞳色；永久变化写 changes，临时状态不写。判定为同人时同一行定出最终身份 tag 词，使用 character name (copyright name) 且不转义圆括号。
+C. 服装时间线：每个正式角色固定当前服装的版型/剪裁、主色和关键部件；没有换装、损坏或时空跳转时跨图沿用。
+D. 时代与世界观：整楼使用同一套具体、自洽的视觉体系；只补全怎么画，不编造画面里有什么。
+E. 选段
+   优先选择突出玩家主角或主要角色的画面，不以有无档案或是否有名字给候选加减分。先确定本图要突出的主体与核心互动，再决定谁入镜；无关在场者可以留在镜头外，若人群本身承载核心互动则保留。
+   按视觉明确度、剧情重要度、动作完整度选出设定数量的 P 位置；每张只画一次快门能完整捕捉的状态。
+
+第二层｜逐张图槽位块（每个入选 P 单独写，不得合并）
+NAI 4.5 一张图 = 一个 Base tag + 每个本图可见的个体角色各写一块 Character tag。只规划 danbooru tags，不规划句子。
+
+■ P<编号>｜Base
+  人数：<2girls / 1boy 1girl / no humans>
+  景别：<close-up / upper body / medium shot / full body / wide shot 只选一个>
+  核心互动：<多人共同动作；单人写 ->
+  场景：<地点 + 可见关键道具>
+  环境光：<光源 + 时间 + 色调>
+  size：<portrait / landscape>
+
+■ P<编号>｜<角色原名>
+  固定外貌：<照抄档案；1girl/1boy 改为 girl/boy>
+  可见服装：<当前镜头可见的具体部件>
+  表情：<标准 danbooru tag>
+  视线：<标准 danbooru tag>
+  个人动作：<该角色的动作>
+  相对位置：<左 / 中 / 右>
+
+硬边界：Base 只放人数、景别、场景、环境光和共享互动；单个角色的外貌、服装、表情、视线和个人动作只放他自己的 characters[].tag。不使用单串多人的邻接绑定。
+若正文明确为显式 NSFW 场景，所属角色 tag 写实际可见解剖部位，Base 写共享性行为与接触，必要时用 source# / target# / mutual# 区分施受。
+
+第三层｜落笔前自查
+- Base 与各角色的 tag 均为英文逗号分隔 tags，没有完整句子、没有自然语言字段。
+- 每个入画角色的固定外貌与档案逐字一致，表情、视线、可见服装和动作都在他自己的 tag 里；不得混入 Base 或其他角色。
+- 每个同人角色的 fandom 身份 tag 在本人 tag 首位；一次性角色不进 changes。
+- 若本图是显式 NSFW 场景，可见解剖部位、共享接触与施受标记均已落到正确的 Base/角色 tag；否则跳过。
+- 画面没有为了减人数破坏核心互动，也没有把无关在场者补进画面。
+- 每个剧情 tag 可追溯到正文/设定；景别容纳核心接触点；图片数在设定范围内。`;
+
 /**
- * NAI 规范:4.5 / V5 的 Base Prompt + 原生 Character Prompts。
- *
- * 模型列表收窄到 4.5/V5 后,这就是 NAI 后端**唯一**的一份规范,设置页里显示为「NAI 规范」。
- *
- * ⚠ 常量名与 settings 键名带 V5 是历史原因(V5 那次开发引入),内容对 4.5 同样适用:
- * char_captions 所在的字段本就叫 v4_prompt,这套 Base + Character Prompts 结构是
- * V4 时代的协议,自然语言也是 4.5 引入的。改名要动用户 settings 里的 naiV5Spec 键,
- * 不值得 —— 面板标签已改成不提代数的「NAI 规范」,键名的历史包袱只留在代码里。
+ * NAI 4.5 默认规范：保留原生 Base + Character Prompts，但只写 danbooru tags。
+ * 这是插件的模型分流策略，不与 V5 的 tags + 自然语言输出混用。
  */
-export const DEFAULT_NAI_V5_SPEC = `[NovelAI 4.5/V5 Prompt Specification]
+export const DEFAULT_NAI_45_SPEC = `[NovelAI 4.5 Tag-only Prompt Specification]
+Map every image to one Base Prompt plus zero or more native Character Prompts. Output danbooru tags only. Do not output natural-language image descriptions or an nl field.
+
+Each image must contain:
+- tag: English comma-separated danbooru tags for the Base Prompt. Put only global character counts, scene, composition, camera, lighting, atmosphere, and shared interactions here.
+- characters: the visible individual characters, ordered left-to-right then top-to-bottom. Every item is {"name":"...","tag":"..."}. Do not add nl.
+
+Character Prompt rules:
+1. A character tag contains that character's identity, sex, fixed appearance, current visible outfit, expression, gaze, pose, action, visible anatomy, and relative position. Use girl/boy rather than 1girl/1boy; numeric counts belong only in Base.
+2. Expression and gaze are mandatory. Use real danbooru tags such as smile, grin, blush, frown, surprised, angry, serious, sad, worried, scared, smug, expressionless, half-closed eyes, open mouth; and looking at viewer, looking at another, looking away, looking down, looking up, looking back, closed eyes. Do not invent prose-like tags.
+3. For every fandom character, put the exact model-recognized identity tag character name (copyright name) first in that character tag and store it in fields.fandom. Do not escape parentheses. Original characters have no fandom field.
+4. For characters in the fixed appearance library, copy every non-empty fixed Tag field verbatim. The backend will enforce these fields again by exact character name. Never substitute a synonym, change a color, or omit body/extra/outfit fields.
+5. Put each character's colors, hair, eyes, body, clothing, objects, expression, gaze, and personal action only in that character's own tag. Never put them in Base or another character's tag. Native Character Prompts provide the binding; do not use single-string adjacency-binding phrases.
+6. Put shared interactions in Base. Use NovelAI source# / target# / mutual# tags inside the relevant character tags when they clarify actor and target.
+7. A visible one-off individual with no library profile still gets a Character Prompt under the exact term used by the story, with one consistent appearance for this image. Keep an unnamed participant when needed to show the core interaction; a missing profile is never a reason to crop them out. Do not register it in changes. A crowd treated as a mass remains in Base and gets no Character Prompt. Only include them when the chosen frame needs the crowd.
+8. For an explicit NSFW scene, name every actually visible action-relevant body part in its owner's tag; put the shared act/contact in Base. Do not claim covered or out-of-frame anatomy is visible.
+
+Name consistency is critical: names in characters[].name and changes[].name must exactly match the source or library spelling. Never translate, transliterate, or vary a library name.
+
+Visual completion:
+- Supply exactly one shot distance, a light source/time, and a color mood in Base. The shot must contain the core contact point; do not tag body parts cropped out by the chosen shot.
+- Follow the world and period evidence consistently. You may complete camera, composition, lighting, and coherent visual styling, but never invent people, actions, terrain, weather traces, or plot facts.
+- Fixed facts such as sex, hair, eyes, skin, body, and signature features follow the library exactly. Current clothing and actions follow the story timeline.
+- Base count is the number of people visible inside the frame, not everyone present in the scene. Other people or crowds may remain off-screen when they do not serve the chosen focus.
+
+Orientation: use landscape for wide/group/horizontally spread compositions and portrait for single figures, close-ups, upright poses, and close two-person compositions. When unsure use portrait.
+
+Do not output quality tags, negative tags, artist presets, XML, prose sentences, or nl. The backend adds artist, quality, and negative defaults.`;
+
+/**
+ * NAI V5 规范：Base + Character Prompts 同时使用 tags 与英文自然语言。
+ * 存储键名 naiV5Spec 保留不变，4.5 的内置默认改用 DEFAULT_NAI_45_SPEC。
+ */
+export const DEFAULT_NAI_V5_SPEC = `[NovelAI V5 Prompt Specification]
 Map every image to one Base Prompt plus zero or more native Character Prompts.
 
 Each image must contain:
@@ -946,7 +1018,7 @@ export interface AutoTagPrompts {
   jailbreak: string;
   /** 【已下线,无 UI 入口】NAI 4 系及以下的单串 tag 规范;回落 DEFAULT_NAI_SPEC。 */
   naiSpec: string;
-  /** NAI 规范(4.5/V5 的 Base Prompt + 原生 Character Prompts);设置页显示为「NAI 规范」。 */
+  /** NAI Character Prompt 自定义规范（历史键名）；留空时 4.5/V5 按模型取各自内置默认。 */
   naiV5Spec: string;
   /** ComfyUI 后端 tag 书写规范,拼在任务提示词里;留空回落内置默认(DEFAULT_COMFY_SPEC)。
    *  支持 {{nl}} 宏:开启「生成自然语言」时展开为自然语言规范,关闭时置空;
@@ -958,7 +1030,7 @@ export interface AutoTagPrompts {
   comfyThinking: string;
   /** 【已下线,无 UI 入口】NAI 4 系及以下的思考清单;回落 DEFAULT_NAI_THINKING。 */
   naiThinking: string;
-  /** NAI 思维链(4.5/V5);留空回落内置默认(DEFAULT_NAI_V5_THINKING)。
+  /** NAI Character Prompt 自定义思维链（历史键名）；留空时 4.5/V5 按模型取各自内置默认。
    *  槽位块是 Base + 每角色块,与 comfy 那份的单串形态不同,不可互换。 */
   naiV5Thinking: string;
   /** assistant 预填充,以 <thinking> 开头引导模型从思维链续写;随渠道「发送预填充」开关生效;

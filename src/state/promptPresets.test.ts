@@ -106,6 +106,15 @@ describe('prompt preset management', () => {
     expect(preset.entries.at(-1)?.content).toBe('旧预填充');
     expect(importPromptPreset(exportPromptPreset(preset), 'nai').entries).toEqual(preset.entries);
   });
+  it('keeps empty NAI legacy slots model-aware through runtime macros', () => {
+    const preset = defaultPromptPreset('nai', {
+      ...settings.autoTag.prompts,
+      naiV5Spec: '',
+      naiV5Thinking: '',
+    });
+    expect(preset.entries.find(entry => entry.name === '生图规范')?.content).toBe('{{后端规范}}');
+    expect(preset.entries.find(entry => entry.name === '生成前检查')?.content).toBe('{{生成前检查}}');
+  });
   it.each(['nai', 'comfyui'] as const)('provides the structured built-in for %s', backend => {
     const preset = storyImagePromptPreset(backend);
     expect(preset.id).toBe(BUILTIN_STORY_IMAGE_PRESET_ID);
@@ -118,11 +127,7 @@ describe('prompt preset management', () => {
     expect(preset.entries.find(entry => entry.name === '人物与状态参考')?.content).toContain('禁止把片段末尾');
     expect(preset.entries.find(entry => entry.name === '资料与目标正文')?.content).toContain('{{状态参考}}');
     const profileReference = preset.entries.find(entry => entry.name === '人物与状态参考')?.content ?? '';
-    if (backend === 'nai') {
-      expect(profileReference).toContain('每条 field:"new" 都必须同时提供非空 nl');
-      expect(profileReference).toContain('只写长期固定的发型发色');
-    } else {
-      expect(profileReference).not.toContain('NovelAI 建档要求');
-    }
+    expect(profileReference).not.toContain('NovelAI 建档要求');
+    expect(profileReference).not.toContain('每条 field:"new" 都必须同时提供非空 nl');
   });
 });

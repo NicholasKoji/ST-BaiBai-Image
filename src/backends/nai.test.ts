@@ -97,14 +97,14 @@ describe('最终 NAI 请求快照', () => {
     characters: [{ name: 'A', tag: '1boy, black hair', nl: 'Standing on the left.' }],
   };
 
-  it('历史与实际序列化 POST 同源，包含质量词、负面词及规范化角色 caption', async () => {
+  it('历史与实际序列化 POST 同源，4.5 仅保留 tags 与规范化角色 caption', async () => {
     const fetchMock = mockImageFetch();
     const s = nai({ qualityTags: 'custom quality', undesiredContent: 'custom negative' });
     const id = beginImage({ backend: 'nai', model: s.model, ...values, negative: '', size: 'portrait', floor: 25, seq: 1 });
     await generateNaiImage(s, values, undefined, { onRequest: snapshot => patchImageRequest(id, snapshot) });
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     const record = records[0] as ImageRecord;
-    expect(record.request?.prompt).toBe('1boy, 1girl, living room, custom quality. Two people in a living room.');
+    expect(record.request?.prompt).toBe('1boy, 1girl, living room, custom quality');
     expect(record.request?.prompt).toBe(body.input);
     expect(record.request?.prompt).toBe(body.parameters.v4_prompt.caption.base_caption);
     expect(record.request?.baseCaption).toBe(body.parameters.v4_prompt.caption.base_caption);
@@ -112,7 +112,9 @@ describe('最终 NAI 请求快照', () => {
     expect(record.request?.negative).toBe(body.parameters.negative_prompt);
     expect(record.request?.negative).toBe(body.parameters.v4_negative_prompt.caption.base_caption);
     expect(record.request?.negativeCaption).toBe(body.parameters.v4_negative_prompt.caption.base_caption);
-    expect(record.request?.characters).toEqual([{ name: 'A', prompt: 'boy, black hair. Standing on the left.', negative: '' }]);
+    expect(record.request?.characters).toEqual([
+      { name: 'A', prompt: 'boy, black hair', negative: '' },
+    ]);
     expect(record.request?.characters[0].prompt).toBe(body.parameters.v4_prompt.caption.char_captions[0].char_caption);
     expect(record.request?.parameters).toMatchObject({ seed: 42, width: 832, height: 1216, sampler: 'k_euler', steps: 28, scale: 5 });
     expect(JSON.stringify(record.request)).not.toContain(s.key);
@@ -520,10 +522,9 @@ describe('NAI V5 support', () => {
     expect(params.reference_strength_multiple).toEqual([0.6]);
   });
 
-  // 回归锁:char_captions 所在字段本就叫 v4_prompt,这套结构是 V4 时代的协议,V5 只是继承。
-  // 曾经按 isNai5 卡过,4.5 明明支持却一条角色提示都发不出去(角色外貌全糊进 Base)。
-  // 边界在 4.5 而非整个 v4 系:自然语言是 4.5 引入的,原版 NAI4 只吃 tag。
-  it('sends native Character Prompts on 4.5 as well as V5, but not on plain NAI 4', () => {
+  // Character Prompts 与自然语言分开锁:4.5 保留原生角色块但只发 tags，
+  // V5 才拼接 NL；原版 NAI4 两者都不发。
+  it('uses tag-only Character Prompts on 4.5 and tag plus NL on V5', () => {
     const values = {
       prompt: '2girls, classroom',
       nl: 'Two girls in a classroom.',
@@ -537,15 +538,20 @@ describe('NAI V5 support', () => {
         }
       ).caption;
 
-    for (const model of ['nai-diffusion-4-5-full', 'nai-diffusion-4-5-curated', 'nai-diffusion-5-full'] as const) {
+    for (const model of ['nai-diffusion-4-5-full', 'nai-diffusion-4-5-curated'] as const) {
       const caption = captionsOf(model);
       expect([model, caption.char_captions.map(c => c.char_caption)]).toEqual([
         model,
-        ['girl, black hair, white dress. On the left.'],
+        ['girl, black hair, white dress'],
       ]);
-      // nl 拼接同样开放到 4.5:句点分隔接在 tag 串之后
-      expect([model, caption.base_caption.endsWith('. Two girls in a classroom.')]).toEqual([model, true]);
+      expect([model, caption.base_caption.includes('Two girls in a classroom.')]).toEqual([model, false]);
     }
+
+    const v5 = captionsOf('nai-diffusion-5-full');
+    expect(v5.char_captions.map(c => c.char_caption)).toEqual([
+      'girl, black hair, white dress. On the left.',
+    ]);
+    expect(v5.base_caption.endsWith('. Two girls in a classroom.')).toBe(true);
 
     // 原版 NAI4 保持单串形态:角色提示与 nl 都不发
     for (const model of ['nai-diffusion-4-full', 'nai-diffusion-4-curated-preview'] as const) {

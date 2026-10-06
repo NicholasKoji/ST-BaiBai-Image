@@ -7,7 +7,7 @@ import {
 } from './promptPresets';
 import {
   DEFAULT_JAILBREAK_PROMPT, DEFAULT_COMFY_SPEC, DEFAULT_COMFY_THINKING,
-  DEFAULT_NAI_V5_SPEC, DEFAULT_NAI_V5_THINKING, DEFAULT_PREFILL_PROMPT,
+  DEFAULT_PREFILL_PROMPT,
   type AutoTagPrompts,
 } from './settings';
 
@@ -19,9 +19,9 @@ export function defaultPromptPreset(backend: PromptPresetBackend, legacy: AutoTa
     ['角色设定', 'system', '{{角色设定}}'],
     ['玩家设定', 'system', '{{玩家设定}}'],
     ['世界书', 'system', '{{世界书}}'],
-    ['生图规范', 'system', backend === 'nai' ? text(legacy.naiV5Spec, DEFAULT_NAI_V5_SPEC) : text(legacy.comfySpec, DEFAULT_COMFY_SPEC)],
+    ['生图规范', 'system', backend === 'nai' ? text(legacy.naiV5Spec, '{{后端规范}}') : text(legacy.comfySpec, DEFAULT_COMFY_SPEC)],
     ['内置任务规则', 'system', '{{内置任务规则}}'],
-    ['生成前检查', 'system', backend === 'nai' ? text(legacy.naiV5Thinking, DEFAULT_NAI_V5_THINKING) : text(legacy.comfyThinking, DEFAULT_COMFY_THINKING)],
+    ['生成前检查', 'system', backend === 'nai' ? text(legacy.naiV5Thinking, '{{生成前检查}}') : text(legacy.comfyThinking, DEFAULT_COMFY_THINKING)],
     ['正文与参考', 'user', '{{上下文}}'],
     ['预填充', 'assistant', text(legacy.prefill, DEFAULT_PREFILL_PROMPT)],
   ] as const;
@@ -62,7 +62,7 @@ const STORY_IMAGE_ENTRIES = [
 2. 同一人物跨图的固定外貌与服装视觉指纹是否一致；镜头重新露出先前省略的部位时，是否恢复了原有部件。
 3. 景别是否完整容纳核心动作与接触点；提示词是否只描述镜头内可见内容。
 4. 多人特征是否逐人绑定；NovelAI 原生 Character Prompt 模式下，人物外貌、衣着和个人动作是否全部进入对应 characters[]，Base 只保留人数、场景、构图、光线与共享互动。
-5. tag 与自然语言是否描述同一画面，人物名是否逐字保持资料中的写法，是否删除了互相冲突、重复或无依据的内容。
+5. tag 是否自洽；若当前后端规范要求自然语言，其是否与 tag 描述同一画面。人物名是否逐字保持资料中的写法，是否删除了互相冲突、重复或无依据的内容。
 6. 最终只输出协议要求的 <thinking>（如使用）与一个可解析 JSON 对象，不使用 Markdown 代码块，不附加解释。`],
   ['资料与目标正文', 'user', `【人物设定】
 {{角色设定}}
@@ -93,8 +93,6 @@ const STORY_IMAGE_ENTRIES = [
   ['预填充', 'assistant', '{{预填充}}'],
 ] as const;
 
-const NAI_NEW_PROFILE_NL_RULE = `8. NovelAI 建档要求：changes 中每条 field:"new" 都必须同时提供非空 nl。这里的 nl 是该角色固定外貌的英文自然语言描述，供后续 NovelAI Character Prompt 稳定复用；它不是本张图片的动作描述。只写长期固定的发型发色、瞳色、肤色、体型和标志特征，不写当前服装、姿势、动作、表情或场景。示例：{"name":"小雪","field":"new","fields":{"sex":"1girl","hair":"long black hair","eyes":"blue eyes"},"nl":"A girl with long black hair and blue eyes.","position":"P2","reason":"首次出场建档"}。`;
-
 /** New built-in prompt, distilled from the reference presets without importing their runtime syntax. */
 export function storyImagePromptPreset(backend: PromptPresetBackend): PromptPreset {
   return {
@@ -105,9 +103,7 @@ export function storyImagePromptPreset(backend: PromptPresetBackend): PromptPres
       id: `${BUILTIN_STORY_IMAGE_PRESET_ID}:${index + 1}`,
       name,
       role,
-      content: backend === 'nai' && name === '人物与状态参考'
-        ? `${content}\n${NAI_NEW_PROFILE_NL_RULE}`
-        : content,
+      content,
       enabled: true,
     })),
   };

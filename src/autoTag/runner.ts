@@ -1,10 +1,11 @@
 import { requestCompletion, requestViaMainApi } from '@/api/client';
-import { naiSupportsCharacterPrompts } from '@/backends/nai';
+import { naiSupportsCharacterPrompts, naiUsesNaturalLanguagePrompts } from '@/backends/nai';
 import { readBookMemory } from '@/autoTag/bookMemory';
 import { readMvuReference } from '@/autoTag/mvu';
 import { getMvuReferenceConfig } from '@/state/mvuReference';
 import {
   applyPositionedCharRefs,
+  mergePositionedCharacterProfileTag,
   resolveCharAnchors,
   type PositionedCharOp,
 } from '@/autoTag/charAnchors';
@@ -358,10 +359,10 @@ async function runForFloor(floor: number, opts: RunOptions = {}): Promise<void> 
           if (
             !slot &&
             settings.defaultBackend === 'nai' &&
-            naiSupportsCharacterPrompts(settings.nai.model) &&
+            naiUsesNaturalLanguagePrompts(settings.nai.model) &&
             candidate.changes.some(change => change.field === 'new' && !change.nl?.trim())
           ) {
-            throw new Error('NAI 4.5/V5 建档必须附带 nl 外貌描述');
+            throw new Error('NAI V5 建档必须附带 nl 外貌描述');
           }
           parsed.plan = candidate;
         };
@@ -453,6 +454,19 @@ async function runForFloor(floor: number, opts: RunOptions = {}): Promise<void> 
           lockedNames,
         );
         character.tag = charTag.text;
+        if (
+          settings.defaultBackend === 'nai' &&
+          naiSupportsCharacterPrompts(settings.nai.model)
+        ) {
+          character.tag = mergePositionedCharacterProfileTag(
+            character.name,
+            character.tag,
+            anchors.entries,
+            effectiveOps,
+            image.sourceLine,
+            lockedNames,
+          );
+        }
         for (const n of charTag.unknown) unknownNames.add(n);
         if (character.nl) {
           const charNl = applyPositionedCharRefs(

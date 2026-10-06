@@ -5,6 +5,7 @@ import {
   applyPositionedCharRefs,
   buildLibraryText,
   formatEntryForPrompt,
+  mergePositionedCharacterProfileTag,
   parseConvertedTags,
   resolveCharAnchors,
 } from '@/autoTag/charAnchors';
@@ -187,6 +188,43 @@ describe('positioned character state', () => {
     // 不锁定:照旧按位置生效
     expect(applyPositionedCharRefs('@玩家, standing', base, ops, 5).text).toBe(
       '1boy, long red hair, standing',
+    );
+  });
+
+  it('deterministically restores every fixed profile field before dynamic tags', () => {
+    const base = [
+      entry('杨世发', {
+        sex: '1boy',
+        hair: 'short black hair',
+        eyes: 'brown eyes',
+        body: 'muscular',
+      }),
+    ];
+    expect(
+      mergePositionedCharacterProfileTag(
+        '杨世发',
+        'boy, short black hair, brown eyes, beige shirt, serious, looking at another',
+        base,
+        [],
+        0,
+      ),
+    ).toBe(
+      'boy, short black hair, brown eyes, muscular, beige shirt, serious, looking at another',
+    );
+  });
+
+  it('uses the position-specific profile and leaves one-off characters unchanged', () => {
+    const base = [entry('小雪', { sex: '1girl', hair: 'long black hair', eyes: 'blue eyes' })];
+    const dyeHair = createCharTagSetOp('小雪', 'hair', 'short red hair', '永久染发')!;
+    const ops = [{ op: dyeHair, sourceLine: 2 }];
+    expect(mergePositionedCharacterProfileTag('小雪', 'girl, white dress', base, ops, 0)).toBe(
+      'girl, long black hair, blue eyes, white dress',
+    );
+    expect(mergePositionedCharacterProfileTag('小雪', 'girl, white dress', base, ops, 2)).toBe(
+      'girl, short red hair, blue eyes, white dress',
+    );
+    expect(mergePositionedCharacterProfileTag('路人', 'boy, grey coat', base, ops, 2)).toBe(
+      'boy, grey coat',
     );
   });
 });
